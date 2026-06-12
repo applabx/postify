@@ -31,22 +31,24 @@ services:
       timeout: 3s
       retries: 5
 
-  # ─── Postify app (optional — or run with `npm run dev`) ──────────────────
+  # ─── Postify app ─────────────────────────────────────────────────────────
   app:
     build: .
     restart: unless-stopped
-    ports:
-      - "3000:3000"
-    environment:
-      DATABASE_URL: postgresql://postify:postify_dev@db:5432/postify
-      REDIS_URL: redis://redis:6379
-      ENABLE_DEV_AUTH: "true"
-      NEXT_PUBLIC_ENABLE_DEV_AUTH: "true"
-    env_file:
-      - .env
-    depends_on:
-      - db
-      - redis
+    labels:
+      coolify.managed: "true"
+      traefik.enable: "true"
+      traefik.http.routers.postify.entrypoints: "http"
+      traefik.http.routers.postify.rule: "Host(`eehzi4dz98bay175wko3wqut.178.105.157.205.sslip.io`)"
+      traefik.http.routers.postify.service: "postify"
+      traefik.http.services.postify.loadbalancer.server.port: "3000"
+    networks:
+      - coolify
+
+networks:
+  coolify:
+    name: coolify
+    external: true
 
 volumes:
   postgres_data:
