@@ -45,14 +45,8 @@ services:
     env_file:
       - .env
     depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    profiles:
-      # Only start app container when explicitly requested:
-      # docker compose --profile app up
-      - app
+      - db
+      - redis
 
 volumes:
   postgres_data:
