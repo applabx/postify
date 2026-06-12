@@ -1,0 +1,110 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
+import { getLinkedInAuthUrl } from '@/lib/oauth/linkedin'
+import { getMetaAuthUrl } from '@/lib/oauth/meta'
+import { getTwitterAuthUrl, getPinterestAuthUrl } from '@/lib/oauth/platforms'
+import { randomBytes, createHash } from 'crypto'
+import { setOAuthStateCookie } from '@/lib/oauth-state'
+
+// GET /api/oauth/[platform]/start
+// Redirects the user to the correct OAuth consent screen
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ platform: string }> }
+) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) {
+    return NextResponse.redirect(new URL('/login', req.url))
+  }
+
+  const { platform } = await params
+  const state = randomBytes(16).toString('hex')
+
+  // Store state in a short-lived cookie to verify on callback
+  const response = (url: string, statePlatform: string) => {
+    const res = NextResponse.redirect(url)
+    setOAuthStateCookie(res, statePlatform, state)
+    return res
+  }
+
+  switch (platform) {
+    case 'linkedin': {
+      const url = getLinkedInAuthUrl(state, req.nextUrl.origin)
+      return response(url, platform)
+    }
+
+    case 'meta': {
+      const url = getMetaAuthUrl(state, req.nextUrl.origin)
+      return response(url, platform)
+    }
+
+    case 'twitter': {
+      // Twitter uses PKCE — generate code verifier + challenge
+      const codeVerifier = randomBytes(32).toString('base64url')
+      const codeChallenge = createHash('sha256')
+        .update(codeVerifier)
+        .digest('base64url')
+
+      const url = getTwitterAuthUrl(state, codeChallenge)
+      const res = NextResponse.redirect(url)
+      setOAuthStateCookie(res, platform, state)
+      res.cookies.set('twitter_code_verifier', codeVerifier, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', maxAge: 600, path: '/' })
+      return res
+    }
+
+    case 'pinterest': {
+      const url = getPinterestAuthUrl(state)
+      return response(url, platform)
+    }
+
+    case 'tumblr': {
+      // Tumblr OAuth 1.0a — need to get a request token first
+      // Then redirect to authorize URL
+      const tumblrAuthUrl = await getTumblrRequestToken(state)
+      return response(tumblrAuthUrl, platform)
+    }
+
+    case 'bluesky': {
+      // Bluesky uses app passwords, not OAuth — redirect to form page
+      return NextResponse.redirect(new URL('/accounts/connect/bluesky', req.url))
+    }
+
+    default:
+      return NextResponse.json({ error: `Unknown platform: ${platform}` }, { status: 400 })
+  }
+}
+
+// Tumblr OAuth 1.0a - get request token then build authorize URL
+async function getTumblrRequestToken(state: string): Promise<string> {
+  const axios = (await import('axios')).default
+
+  // Build OAuth 1.0a signature for request token
+  const timestamp = Math.floor(Date.now() / 1000).toString()
+  const nonce = randomBytes(16).toString('hex')
+  const callbackUrl = encodeURIComponent(`${process.env.NEXT_PUBLIC_APP_URL}/api/oauth/tumblr/callback?state=${state}`)
+
+  const res = await axios.post(
+    'https://www.tumblr.com/oauth/request_token',
+    null,
+    {
+      params: {
+        oauth_callback: decodeURIComponent(callbackUrl),
+        oauth_consumer_key: process.env.TUMBLR_CONSUMER_KEY,
+        oauth_nonce: nonce,
+        oauth_signature_method: 'HMAC-SHA1',
+        oauth_timestamp: timestamp,
+        oauth_version: '1.0',
+      },
+    }
+  ).catch(() => null)
+
+  if (!res?.data) {
+    // Fallback if request token fails — redirect to accounts with error
+    return `${process.env.NEXT_PUBLIC_APP_URL}/accounts?error=tumblr_init_failed`
+  }
+
+  const params = new URLSearchParams(res.data)
+  const oauthToken = params.get('oauth_token')
+  return `https://www.tumblr.com/oauth/authorize?oauth_token=${oauthToken}`
+}

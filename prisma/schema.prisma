@@ -1,0 +1,136 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-arm64-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      SocialAccount[]
+  posts         Post[]
+  scheduledJobs ScheduledJob[]
+}
+
+// A connected social platform account (e.g. one LinkedIn Page, one Facebook Group)
+model SocialAccount {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  platform      Platform
+  accountType   AccountType
+  externalId    String   // Platform's own ID for this page/account/group
+  name          String
+  handle        String?
+  avatarUrl     String?
+
+  // OAuth tokens
+  accessToken   String
+  refreshToken  String?
+  tokenExpiry   DateTime?
+
+  // LinkedIn / Facebook specific
+  pageId        String?  // For pages/groups that need a separate ID
+  pageToken     String?  // Page-level access token (Facebook)
+
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  postTargets   PostTarget[]
+
+  @@unique([userId, platform, externalId])
+  @@index([userId, platform])
+}
+
+enum Platform {
+  LINKEDIN
+  FACEBOOK
+  INSTAGRAM
+  TWITTER
+  THREADS
+  BLUESKY
+  PINTEREST
+  TUMBLR
+}
+
+enum AccountType {
+  PERSONAL
+  PAGE
+  GROUP
+  BLOG
+  BOARD
+}
+
+model Post {
+  id          String     @id @default(cuid())
+  userId      String
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  text        String     @db.Text
+  mediaUrls   String[]   // Cloudinary or local URLs
+  mediaTypes  String[]   // "image" | "video" for each
+
+  status      PostStatus @default(DRAFT)
+  publishedAt DateTime?
+  scheduledAt DateTime?
+
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  targets     PostTarget[]
+  scheduledJob ScheduledJob?
+}
+
+enum PostStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHING
+  PUBLISHED
+  PARTIAL   // Some targets succeeded, some failed
+  FAILED
+}
+
+// Each row = one platform destination for a post
+model PostTarget {
+  id              String        @id @default(cuid())
+  postId          String
+  post            Post          @relation(fields: [postId], references: [id], onDelete: Cascade)
+  socialAccountId String
+  socialAccount   SocialAccount @relation(fields: [socialAccountId], references: [id])
+
+  status          TargetStatus  @default(PENDING)
+  externalPostId  String?       // ID returned by the platform after posting
+  errorMessage    String?
+  publishedAt     DateTime?
+
+  @@unique([postId, socialAccountId])
+}
+
+enum TargetStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  SKIPPED
+}
+
+model ScheduledJob {
+  id        String   @id @default(cuid())
+  postId    String   @unique
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  bullJobId String?  // BullMQ job ID
+  runAt     DateTime
+  createdAt DateTime @default(now())
+}

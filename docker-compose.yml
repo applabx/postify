@@ -1,0 +1,59 @@
+services:
+  # ─── PostgreSQL ──────────────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: postify
+      POSTGRES_USER: postify
+      POSTGRES_PASSWORD: postify_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postify"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Redis (for BullMQ scheduler) ────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ─── Postify app (optional — or run with `npm run dev`) ──────────────────
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://postify:postify_dev@db:5432/postify
+      REDIS_URL: redis://redis:6379
+      ENABLE_DEV_AUTH: "true"
+      NEXT_PUBLIC_ENABLE_DEV_AUTH: "true"
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    profiles:
+      # Only start app container when explicitly requested:
+      # docker compose --profile app up
+      - app
+
+volumes:
+  postgres_data:
+  redis_data:

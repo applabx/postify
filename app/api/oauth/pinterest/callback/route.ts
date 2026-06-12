@@ -1,0 +1,50 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
+import { exchangePinterestCode, getPinterestBoards } from '@/lib/oauth/platforms'
+import { prisma } from '@/lib/prisma'
+import { isValidOAuthState, clearOAuthStateCookie } from '@/lib/oauth-state'
+
+export async function GET(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) {
+    return NextResponse.redirect(new URL('/login', req.url))
+  }
+
+  const { searchParams } = new URL(req.url)
+  const code = searchParams.get('code')
+  const state = searchParams.get('state')
+  const error = searchParams.get('error')
+
+  if (!isValidOAuthState(req, 'pinterest', state)) {
+    return NextResponse.redirect(new URL('/accounts?error=pinterest_state_mismatch', req.url))
+  }
+
+  if (error || !code) {
+    return NextResponse.redirect(new URL('/accounts?error=pinterest_denied', req.url))
+  }
+
+  try {
+    const tokens = await exchangePinterestCode(code)
+    const boards = await getPinterestBoards(tokens.access_token)
+
+    // Pinterest: one account, many boards — save account + pass boards to picker
+    const pendingData = Buffer.from(
+      JSON.stringify({
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token,
+        expiresIn: tokens.expires_in,
+        boards,
+      })
+    ).toString('base64url')
+
+    const res = NextResponse.redirect(
+      new URL(`/accounts/connect/pinterest?data=${pendingData}`, req.url)
+    )
+    clearOAuthStateCookie(res, 'pinterest')
+    return res
+  } catch (err: any) {
+    console.error('Pinterest OAuth error:', err.response?.data || err.message)
+    return NextResponse.redirect(new URL('/accounts?error=pinterest_failed', req.url))
+  }
+}

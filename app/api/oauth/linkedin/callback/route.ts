@@ -1,0 +1,136 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
+import {
+  exchangeLinkedInCode,
+  getLinkedInProfile,
+  getLinkedInAdminPages,
+} from '@/lib/oauth/linkedin'
+import { prisma } from '@/lib/prisma'
+import { isValidOAuthState, clearOAuthStateCookie } from '@/lib/oauth-state'
+import { encryptSecret } from '@/lib/secrets'
+
+async function ensureSessionUser(session: { user: { id: string; email?: string | null; name?: string | null } }) {
+  await prisma.user.upsert({
+    where: { id: session.user.id },
+    update: {
+      email: session.user.email ?? undefined,
+      name: session.user.name ?? undefined,
+    },
+    create: {
+      id: session.user.id,
+      email: session.user.email ?? `${session.user.id}@local.invalid`,
+      name: session.user.name ?? session.user.id,
+    },
+  })
+}
+
+export async function GET(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) {
+    return NextResponse.redirect(new URL('/login', req.url))
+  }
+
+  const { searchParams } = new URL(req.url)
+  const code = searchParams.get('code')
+  const state = searchParams.get('state')
+  const error = searchParams.get('error')
+
+  if (!isValidOAuthState(req, 'linkedin', state)) {
+    return NextResponse.redirect(new URL('/accounts?error=linkedin_state_mismatch', req.url))
+  }
+
+  if (error || !code) {
+    return NextResponse.redirect(
+      new URL(`/accounts?error=linkedin_denied`, req.url)
+    )
+  }
+
+  try {
+    await ensureSessionUser(session as { user: { id: string; email?: string | null; name?: string | null } })
+
+    // 1. Exchange code for access token
+    const { accessToken, expiresIn } = await exchangeLinkedInCode(code, req.nextUrl.origin)
+
+    // 2. Get user's LinkedIn profile
+    const profile = await getLinkedInProfile(accessToken)
+
+    // 3. Fetch ALL pages this user manages (requires org scopes — may not be granted)
+    let pages: Awaited<ReturnType<typeof getLinkedInAdminPages>> = []
+    let orgAccessDenied = false
+    try {
+      pages = await getLinkedInAdminPages(accessToken)
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: unknown }; message?: string }
+      const apiError = error.response?.data as { code?: string } | undefined
+      if (apiError?.code === 'ACCESS_DENIED') {
+        orgAccessDenied = true
+      }
+      console.warn('LinkedIn admin pages fetch failed (proceeding with personal account only):', error.response?.data || error.message)
+    }
+
+    const tokenExpiry = new Date(Date.now() + expiresIn * 1000)
+
+    // 4a. No pages
+    if (pages.length === 0) {
+      // If org scope is denied, fail clearly for page-only mode.
+      if (orgAccessDenied) {
+        const res = NextResponse.redirect(
+          new URL('/accounts?error=linkedin_pages_permissions_required', req.url)
+        )
+        clearOAuthStateCookie(res, 'linkedin')
+        return res
+      }
+
+      // Otherwise save personal account directly and finish.
+      await prisma.socialAccount.upsert({
+        where: {
+          userId_platform_externalId: {
+            userId: session.user.id,
+            platform: 'LINKEDIN',
+            externalId: profile.id,
+          },
+        },
+        update: {
+          accessToken: encryptSecret(accessToken),
+          tokenExpiry,
+          name: profile.name,
+          avatarUrl: profile.picture,
+          isActive: true,
+        },
+        create: {
+          userId: session.user.id,
+          platform: 'LINKEDIN',
+          accountType: 'PERSONAL',
+          externalId: profile.id,
+          name: profile.name,
+          handle: profile.email,
+          avatarUrl: profile.picture,
+          accessToken: encryptSecret(accessToken),
+          tokenExpiry,
+          isActive: true,
+        },
+      })
+      const res = NextResponse.redirect(new URL('/accounts?success=linkedin', req.url))
+      clearOAuthStateCookie(res, 'linkedin')
+      return res
+    }
+
+    // 4b. Pages found — let user pick which ones to connect
+    const pendingData = Buffer.from(
+      JSON.stringify({ accessToken, tokenExpiry, profile, pages })
+    ).toString('base64url')
+
+    const res = NextResponse.redirect(
+      new URL(`/accounts/connect/linkedin?data=${pendingData}`, req.url)
+    )
+    clearOAuthStateCookie(res, 'linkedin')
+    return res
+  } catch (err: unknown) {
+    const error = err as { response?: { data?: unknown }; message?: string }
+    console.error('LinkedIn OAuth error:', error.response?.data || error.message)
+    return NextResponse.redirect(
+      new URL(`/accounts?error=linkedin_failed`, req.url)
+    )
+  }
+}
