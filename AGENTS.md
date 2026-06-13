@@ -127,6 +127,22 @@ Do not treat `deploy.sh` as production-safe until `prisma db push --accept-data-
 - Scheduler/queue behavior in `lib/scheduler.ts`.
 - CI behavior in `.github/workflows/ci.yml`.
 
+## Postify Coolify Deployment
+
+- Coolify project UUID: `zkn0b8z7ubb4a59mlv8pmfdc` ("Postify")
+- App UUID: `eehzi4dz98bay175wko3wqut`
+- GitHub repo: `https://github.com/applabx/postify` (master branch)
+- Source GitHub App: `vo1crbnhartzt5pofv1ypu7s` (applabx)
+- Domain: `https://postify.applabx.com` (Traefik labels in compose, DNS A record pointing to server IP)
+- Managed PostgreSQL: `mokffvpqs75w6cg3ixyxxzuq`
+- Managed Redis: `xxe3cwi6zi2y7o21xtg09xrk`
+
+### Coolify env var gotcha
+When setting runtime env vars via `PATCH /applications/{uuid}/envs/bulk`, you MUST include `"is_buildtime": false` AND `"is_runtime": true`. If `is_runtime` is missing, the var only applies at build time. This caused NEXTAUTH_SECRET, AUTH_USE_PRISMA_ADAPTER, and ENABLE_DEV_AUTH to silently not work.
+
+### Dev auth
+For local/dev testing without Google OAuth: set `ENABLE_DEV_AUTH=true` + `AUTH_USE_PRISMA_ADAPTER=false` (so auth bypasses DB). Also set `NEXTAUTH_URL` and `NEXT_PUBLIC_APP_URL` to the production URL (not the auto-generated sslip.io one).
+
 ## Current Operational Notes
 
 - This folder currently is not a Git repository according to `git status`.

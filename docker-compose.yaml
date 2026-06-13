@@ -35,6 +35,13 @@ services:
   app:
     build: .
     restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - ENABLE_DEV_AUTH=true
+      - AUTH_USE_PRISMA_ADAPTER=false
+    env_file:
+      - path: .env.local
+        required: false
     labels:
       coolify.managed: "true"
       traefik.enable: "true"
