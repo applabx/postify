@@ -39,7 +39,7 @@ services:
       coolify.managed: "true"
       traefik.enable: "true"
       traefik.http.routers.postify.entrypoints: "http"
-      traefik.http.routers.postify.rule: "Host(`eehzi4dz98bay175wko3wqut.178.105.157.205.sslip.io`)"
+      traefik.http.routers.postify.rule: "Host(`postify.applabx.com`)"
       traefik.http.routers.postify.service: "postify"
       traefik.http.services.postify.loadbalancer.server.port: "3000"
     networks:
