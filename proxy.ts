@@ -3,12 +3,10 @@ import { NextResponse } from 'next/server'
 
 export default withAuth(
   function middleware(req) {
-    // All matched routes are now protected — next-auth handles the redirect
     return NextResponse.next()
   },
   {
     callbacks: {
-      // Return true = allow, false = redirect to login
       authorized: ({ token }) => !!token,
     },
     pages: {
@@ -17,9 +15,12 @@ export default withAuth(
   }
 )
 
-// Protect everything except login, public assets, and API auth routes
+// Protect everything except:
+// - Public auth pages (register, forgot-password, reset-password)
+// - NextAuth API routes
+// - Static assets and health checks
 export const config = {
   matcher: [
-    '/((?!login|api/auth|_next/static|_next/image|favicon.ico).*)',
+    '/((?!login|register|forgot-password|reset-password|api/auth/callback|api/auth/csrf|api/auth/providers|_next/static|_next/image|favicon.ico|api/health).*)',
   ],
 }

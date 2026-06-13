@@ -42,7 +42,6 @@ services:
   app:
     image: ttl.sh/applabx/postify:latest
     pull_policy: always
-    build: .
     restart: unless-stopped
     environment:
       - NODE_ENV=production

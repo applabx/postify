@@ -1,0 +1,13 @@
+# Environment files — never include in Docker image
+.env
+.env.local
+.env.development
+.env.development.local
+.env.production
+.env.production.local
+.env.test
+.env.test.local
+.next
+node_modules/.cache
+*.log
+.DS_Store
