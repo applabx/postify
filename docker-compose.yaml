@@ -32,6 +32,9 @@ services:
       retries: 5
 
   # ─── Postify app ─────────────────────────────────────────────────────────
+  # NOTE: All secrets (NEXTAUTH_SECRET, DATABASE_URL, etc.) are injected
+  # by Coolify at runtime via Environment Variables in the dashboard.
+  # Do NOT add secrets here or reference .env files that aren't in the repo.
   app:
     build: .
     restart: unless-stopped
@@ -39,9 +42,6 @@ services:
       - NODE_ENV=production
       - ENABLE_DEV_AUTH=true
       - AUTH_USE_PRISMA_ADAPTER=false
-    env_file:
-      - path: .env.local
-        required: false
     labels:
       coolify.managed: "true"
       traefik.enable: "true"

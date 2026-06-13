@@ -1,7 +1,8 @@
 'use client'
 
-import { getProviders, signIn } from 'next-auth/react'
-import { Suspense, useEffect, useState } from 'react'
+import { signIn } from 'next-auth/react'
+import Link from 'next/link'
+import { Suspense, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 
 export default function LoginPage() {
@@ -15,150 +16,151 @@ export default function LoginPage() {
 function LoginContent() {
   const searchParams = useSearchParams()
   const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [hasGoogle, setHasGoogle] = useState(false)
-  const [hasDevAuth, setHasDevAuth] = useState(false)
-  const hasAnyAuth = hasGoogle || hasDevAuth
+  const [showPassword, setShowPassword] = useState(false)
 
   const callbackUrl = searchParams.get('callbackUrl') || '/compose'
+  const verified = searchParams.get('verified')
+  const errorParam = searchParams.get('error')
 
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      try {
-        const providers = await getProviders()
-        if (cancelled) return
-        setHasGoogle(!!providers?.google)
-        setHasDevAuth(!!providers?.credentials)
-      } catch {
-        if (cancelled) return
-        setHasGoogle(false)
-        setHasDevAuth(false)
-      }
-    })()
-    return () => {
-      cancelled = true
+  // Handle NextAuth error redirects (read at render time, not in effect)
+  if (errorParam && !error) {
+    if (errorParam === 'CredentialsSignin') {
+      setError('Incorrect email or password.')
+    } else if (errorParam === 'verification_failed') {
+      setError('Email verification failed. Please try again.')
+    } else {
+      setError('Sign-in failed. Please try again.')
     }
-  }, [])
-
-  const handleGoogle = async () => {
-    setLoading(true)
-    await signIn('google', { callbackUrl })
   }
 
-  const handleEmail = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!email.trim()) return
+    if (!email.trim() || !password) return
     setLoading(true)
     setError('')
+
     const result = await signIn('credentials', {
-      email,
-      password: 'dev',
+      email: email.trim(),
+      password,
       callbackUrl,
       redirect: false,
     })
+
     if (result?.error) {
       if (result.error === 'CredentialsSignin') {
-        setError('Sign-in was rejected by server. Check container logs and auth env settings.')
+        setError('Incorrect email or password.')
+      } else if (result.error === 'OAuthCallback') {
+        setError('Authentication error. Please try again.')
       } else {
-        setError('Sign in failed. Please try again.')
+        setError('Sign-in failed. Please try again.')
       }
       setLoading(false)
+    } else if (result?.url) {
+      window.location.href = result.url
     } else {
       window.location.href = callbackUrl
     }
   }
 
-  return <LoginShell hasGoogle={hasGoogle} hasDevAuth={hasDevAuth} hasAnyAuth={hasAnyAuth} loading={loading} error={error} email={email} setEmail={setEmail} onGoogle={handleGoogle} onEmail={handleEmail} />
+  return (
+    <LoginShell>
+      <div style={{ width: 44, height: 44, background: '#7c6eff', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, fontWeight: 700, color: 'white', margin: '0 auto 16px' }}>P</div>
+      <h1 style={{ fontSize: 22, fontWeight: 600, color: '#1a1a2e', margin: '0 0 6px', textAlign: 'center' }}>Welcome back</h1>
+      <p style={{ fontSize: 13, color: '#888899', margin: '0 0 28px', textAlign: 'center' }}>Sign in to start publishing everywhere</p>
+
+      {verified && (
+        <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: '10px 12px', marginBottom: 16, fontSize: 13, color: '#166534' }}>
+          ✓ Email verified! You can now sign in.
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit}>
+        <label style={{ fontSize: 12, fontWeight: 500, color: '#555', display: 'block', marginBottom: 4 }}>Email</label>
+        <input
+          type="email"
+          placeholder="alex@example.com"
+          value={email}
+          onChange={e => setEmail(e.target.value)}
+          required
+          autoComplete="email"
+          style={{ width: '100%', padding: '10px 12px', background: '#f0f0f5', border: '1px solid rgba(0,0,0,0.10)', borderRadius: 8, color: '#1a1a2e', fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box', display: 'block', marginBottom: 12 }}
+        />
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+          <label style={{ fontSize: 12, fontWeight: 500, color: '#555' }}>Password</label>
+          <Link href="/forgot-password" style={{ fontSize: 11, color: '#7c6eff', textDecoration: 'none' }}>
+            Forgot password?
+          </Link>
+        </div>
+        <div style={{ position: 'relative' }}>
+          <input
+            type={showPassword ? 'text' : 'password'}
+            placeholder="••••••••"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            required
+            autoComplete="current-password"
+            style={{ width: '100%', padding: '10px 40px 10px 12px', background: '#f0f0f5', border: '1px solid rgba(0,0,0,0.10)', borderRadius: 8, color: '#1a1a2e', fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box', display: 'block' }}
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword(v => !v)}
+            style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#888' }}
+          >
+            {showPassword ? '🙈' : '👁'}
+          </button>
+        </div>
+
+        {error && (
+          <p style={{ fontSize: 12, color: '#d94040', marginTop: 10 }}>{error}</p>
+        )}
+
+        <button
+          type="submit"
+          disabled={loading || !email.trim() || !password}
+          style={{
+            width: '100%',
+            padding: '12px',
+            background: '#7c6eff',
+            border: 'none',
+            borderRadius: 8,
+            color: 'white',
+            fontSize: 14,
+            fontWeight: 500,
+            fontFamily: 'inherit',
+            marginTop: 16,
+            opacity: loading || !email.trim() || !password ? 0.5 : 1,
+            cursor: loading || !email.trim() || !password ? 'not-allowed' : 'pointer',
+          }}
+        >
+          {loading ? 'Signing in...' : 'Sign in'}
+        </button>
+      </form>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '20px 0' }}>
+        <div style={{ flex: 1, height: 1, background: 'rgba(0,0,0,0.08)' }} />
+        <span style={{ fontSize: 12, color: '#aaaabc' }}>or</span>
+        <div style={{ flex: 1, height: 1, background: 'rgba(0,0,0,0.08)' }} />
+      </div>
+
+      <p style={{ fontSize: 13, color: '#555', textAlign: 'center', margin: 0 }}>
+        Don&apos;t have an account?{' '}
+        <Link href="/register" style={{ color: '#7c6eff', textDecoration: 'none', fontWeight: 500 }}>
+          Create account
+        </Link>
+      </p>
+    </LoginShell>
+  )
 }
 
-function LoginShell({
-  hasGoogle = false,
-  hasDevAuth = false,
-  hasAnyAuth = false,
-  loading = false,
-  error = '',
-  email = '',
-  setEmail = () => {},
-  onGoogle = () => {},
-  onEmail = (e: React.FormEvent) => e.preventDefault(),
-}: {
-  hasGoogle?: boolean
-  hasDevAuth?: boolean
-  hasAnyAuth?: boolean
-  loading?: boolean
-  error?: string
-  email?: string
-  setEmail?: (value: string) => void
-  onGoogle?: () => void
-  onEmail?: (e: React.FormEvent) => void
-}) {
+function LoginShell({ children }: { children?: React.ReactNode }) {
   return (
     <div style={{ minHeight: '100vh', background: '#f5f5f8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ background: '#ffffff', border: '1px solid rgba(0,0,0,0.09)', borderRadius: 16, padding: 36, width: '100%', maxWidth: 380, textAlign: 'center', boxShadow: '0 2px 16px rgba(0,0,0,0.06)' }}>
-        <div style={{ width: 44, height: 44, background: '#7c6eff', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, fontWeight: 700, color: 'white', margin: '0 auto 16px' }}>P</div>
-        <h1 style={{ fontSize: 22, fontWeight: 600, color: '#1a1a2e', margin: '0 0 6px' }}>Postify</h1>
-        <p style={{ fontSize: 13, color: '#888899', margin: '0 0 28px' }}>Sign in to start publishing everywhere</p>
-
-        {/* Google button — only shown when Google OAuth is configured */}
-        {hasGoogle && (
-          <>
-            <button
-              onClick={onGoogle}
-              disabled={loading}
-              style={{ width: '100%', padding: '11px 16px', background: '#f0f0f5', border: '1px solid rgba(0,0,0,0.10)', borderRadius: 9, color: '#1a1a2e', fontSize: 14, fontWeight: 500, cursor: loading ? 'not-allowed' : 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, opacity: loading ? 0.6 : 1, marginBottom: 16 }}
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M15.68 8.18c0-.57-.05-1.11-.14-1.64H8v3.1h4.3a3.67 3.67 0 01-1.59 2.41v2h2.57c1.5-1.38 2.4-3.42 2.4-5.87z" fill="#4285F4"/>
-                <path d="M8 16c2.16 0 3.97-.72 5.29-1.94l-2.57-2a4.8 4.8 0 01-7.17-2.52H.98v2.06A8 8 0 008 16z" fill="#34A853"/>
-                <path d="M3.55 9.54A4.83 4.83 0 013.3 8c0-.54.09-1.06.25-1.54V4.4H.98A8 8 0 000 8c0 1.29.31 2.51.98 3.6l2.57-2.06z" fill="#FBBC05"/>
-                <path d="M8 3.18c1.22 0 2.31.42 3.17 1.24l2.37-2.37A8 8 0 00.98 4.4l2.57 2.06A4.77 4.77 0 018 3.18z" fill="#EA4335"/>
-              </svg>
-              Continue with Google
-            </button>
-
-            {/* Divider */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-              <div style={{ flex: 1, height: 1, background: 'rgba(0,0,0,0.08)' }} />
-              <span style={{ fontSize: 12, color: '#aaaabc' }}>or</span>
-              <div style={{ flex: 1, height: 1, background: 'rgba(0,0,0,0.08)' }} />
-            </div>
-          </>
-        )}
-
-        {hasDevAuth && (
-          <form onSubmit={onEmail}>
-            <input
-              type="email"
-              placeholder="your@email.com"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              style={{ width: '100%', padding: '10px 12px', background: '#f0f0f5', border: '1px solid rgba(0,0,0,0.10)', borderRadius: 8, color: '#1a1a2e', fontSize: 13, fontFamily: 'inherit', outline: 'none', marginBottom: 10, boxSizing: 'border-box' }}
-            />
-            <button
-              type="submit"
-              disabled={loading || !email.trim()}
-              style={{ width: '100%', padding: '11px', background: '#7c6eff', border: 'none', borderRadius: 8, color: 'white', fontSize: 14, fontWeight: 500, cursor: loading ? 'not-allowed' : 'pointer', fontFamily: 'inherit', opacity: loading || !email.trim() ? 0.5 : 1 }}
-            >
-              {loading ? 'Signing in...' : 'Continue with Email'}
-            </button>
-          </form>
-        )}
-
-        {!hasAnyAuth && (
-          <p style={{ fontSize: 12, color: '#d94040', marginTop: 12 }}>
-            No sign-in method is enabled. Configure Google OAuth or enable dev auth.
-          </p>
-        )}
-
-        {error && <p style={{ fontSize: 12, color: '#d94040', marginTop: 12 }}>{error}</p>}
-
-        {hasDevAuth && (
-          <p style={{ fontSize: 11, color: '#aaaabc', marginTop: 16 }}>
-            Local dev login: use any email address.
-          </p>
-        )}
+      <div style={{ background: '#ffffff', border: '1px solid rgba(0,0,0,0.09)', borderRadius: 16, padding: 36, width: '100%', maxWidth: 380, boxShadow: '0 2px 16px rgba(0,0,0,0.06)' }}>
+        {children}
       </div>
     </div>
   )

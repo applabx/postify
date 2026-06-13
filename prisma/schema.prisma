@@ -16,6 +16,19 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
+  // Password auth
+  passwordHash            String?
+  emailVerified           DateTime?
+  emailVerificationToken  String?   @unique
+
+  // Password reset
+  resetToken       String?
+  resetTokenExpiry DateTime?
+
+  // Brute-force protection
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime?
+
   accounts      SocialAccount[]
   posts         Post[]
   scheduledJobs ScheduledJob[]
