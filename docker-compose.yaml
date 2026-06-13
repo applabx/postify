@@ -35,7 +35,13 @@ services:
   # NOTE: All secrets (NEXTAUTH_SECRET, DATABASE_URL, etc.) are injected
   # by Coolify at runtime via Environment Variables in the dashboard.
   # Do NOT add secrets here or reference .env files that aren't in the repo.
+  #
+  # IMAGE SOURCE: after auth fix, update to:
+  #   build: .
+  # When Coolify build server is enabled, it will build from source.
   app:
+    image: ttl.sh/applabx/postify:latest
+    pull_policy: always
     build: .
     restart: unless-stopped
     environment:
