@@ -29,10 +29,15 @@ function RegisterContent() {
     setError('')
 
     try {
+      // Fetch CSRF token first (sets httpOnly cookie)
+      const csrfRes = await fetch('/api/auth/register/start')
+      if (!csrfRes.ok) throw new Error('Failed to initialise request')
+      const { csrfToken } = await csrfRes.json()
+
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, name }),
+        body: JSON.stringify({ csrfToken, email, password, name }),
       })
       const data = await res.json()
 

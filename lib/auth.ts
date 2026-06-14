@@ -4,6 +4,28 @@ import CredentialsProvider from 'next-auth/providers/credentials'
 import { PrismaAdapter } from '@next-auth/prisma-adapter'
 import { prisma } from './prisma'
 import bcrypt from 'bcryptjs'
+import Redis from 'ioredis'
+
+// ─── Redis client (lazy singleton — shared across all workers) ────────────────
+
+let _redis: Redis | null = null
+
+function getRedis(): Redis | null {
+  if (_redis) return _redis
+  try {
+    _redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
+      lazyConnect: true,
+      maxRetriesPerRequest: 1,
+      enableOfflineQueue: false,
+    })
+    _redis.on('error', () => {
+      // Silently swallow — fallback to in-memory will protect the request
+    })
+  } catch {
+    return null
+  }
+  return _redis
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -42,7 +64,7 @@ function getUsePrismaAdapter(): boolean {
   )
 }
 
-// ─── In-memory rate limiter ────────────────────────────────────────────────────
+// ─── Redis-backed rate limiter (with in-memory fallback) ──────────────────────
 
 interface RateLimitEntry {
   count: number
@@ -54,6 +76,7 @@ const rateLimitMap = new Map<string, RateLimitEntry>()
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000 // 15 minutes
 const MAX_ATTEMPTS_PER_WINDOW = 20
 
+// Synchronous in-memory check (fallback only — not shared across workers)
 export function checkRateLimit(key: string): { allowed: boolean } {
   const now = Date.now()
   const entry = rateLimitMap.get(key)
@@ -71,7 +94,48 @@ export function checkRateLimit(key: string): { allowed: boolean } {
   return { allowed: true }
 }
 
-export function clearRateLimit(key: string): void {
+// Async — uses Redis when available (global across all workers), falls back to in-memory
+export async function checkRateLimitAsync(key: string): Promise<{ allowed: boolean }> {
+  const redis = getRedis()
+
+  if (redis) {
+    try {
+      const rlKey = `ratelimit:${key}`
+      const pipeline = redis.pipeline()
+      pipeline.incr(rlKey)
+      pipeline.pttl(rlKey)
+      const results = await pipeline.exec()
+
+      if (results && results.length >= 2) {
+        const count = results[0][1] as number
+        const ttl = results[1][1] as number
+
+        // Set expiry on first request in this window
+        if (ttl === -1) {
+          await redis.pexpire(rlKey, RATE_LIMIT_WINDOW_MS)
+        }
+
+        return { allowed: count <= MAX_ATTEMPTS_PER_WINDOW }
+      }
+    } catch {
+      // Redis unavailable — fall through to in-memory
+    }
+  }
+
+  // In-memory fallback
+  return checkRateLimit(key)
+}
+
+export async function clearRateLimit(key: string): Promise<void> {
+  const redis = getRedis()
+  if (redis) {
+    try {
+      await redis.del(`ratelimit:${key}`)
+      return
+    } catch {
+      // Redis unavailable — fall through
+    }
+  }
   rateLimitMap.delete(key)
 }
 
@@ -104,7 +168,7 @@ export const authOptions: NextAuthOptions = {
             .request?.headers?.['x-real-ip'] ||
           'unknown'
         const rlKey = `${ip}:${creds.email}`
-        const { allowed } = checkRateLimit(rlKey)
+        const { allowed } = await checkRateLimitAsync(rlKey)
         if (!allowed) {
           console.warn(`[Auth] Rate limit exceeded for ${rlKey}`)
           throw new Error('Too many login attempts. Please try again in 15 minutes.')
@@ -115,7 +179,7 @@ export const authOptions: NextAuthOptions = {
         const usePrismaAdapter = getUsePrismaAdapter()
 
         if (devAuthEnabled && creds.password === 'dev') {
-          clearRateLimit(rlKey)
+          await clearRateLimit(rlKey)
           // Dev mode: create/return user via DB (fast path for development)
           if (!usePrismaAdapter) {
             return {
@@ -152,7 +216,7 @@ export const authOptions: NextAuthOptions = {
           })
 
           if (!user || !user.passwordHash) {
-            clearRateLimit(rlKey)
+            await clearRateLimit(rlKey)
             return null
           }
 
@@ -175,8 +239,15 @@ export const authOptions: NextAuthOptions = {
             return null
           }
 
+          // Block unverified users — they must click the email link first
+          if (!user.emailVerified) {
+            await clearRateLimit(rlKey)
+            console.warn(`[Auth] Login blocked — email not verified: ${creds.email}`)
+            throw new Error('EMAIL_NOT_VERIFIED')
+          }
+
           // Success — reset failed attempts, clear rate limit
-          clearRateLimit(rlKey)
+          await clearRateLimit(rlKey)
           if (user.failedLoginAttempts > 0 || user.lockedUntil) {
             await prisma.user.update({
               where: { id: user.id },

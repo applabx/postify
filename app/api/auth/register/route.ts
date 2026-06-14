@@ -8,6 +8,7 @@ import crypto from 'crypto'
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const MIN_PASSWORD_LENGTH = 8
+const CSRF_COOKIE = 'csrf_register'
 
 export async function POST(req: NextRequest) {
   try {
@@ -16,8 +17,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Already logged in' }, { status: 400 })
     }
 
+    // ── CSRF double-submit validation ─────────────────────────────────────────
+    const csrfCookie = req.cookies.get(CSRF_COOKIE)?.value
     const body = await req.json()
-    const { email, password, name } = body
+    const { csrfToken, email, password, name } = body
+
+    if (!csrfCookie || !csrfToken || csrfCookie !== csrfToken) {
+      return NextResponse.json({ error: 'Invalid request — please refresh and try again.' }, { status: 403 })
+    }
 
     // Validate input
     if (!email || !EMAIL_REGEX.test(email)) {

@@ -29,6 +29,8 @@ function LoginContent() {
   if (errorParam && !error) {
     if (errorParam === 'CredentialsSignin') {
       setError('Incorrect email or password.')
+    } else if (errorParam === 'EMAIL_NOT_VERIFIED') {
+      setError('Please verify your email before signing in. Check your inbox for the verification link.')
     } else if (errorParam === 'verification_failed') {
       setError('Email verification failed. Please try again.')
     } else {
@@ -52,6 +54,8 @@ function LoginContent() {
     if (result?.error) {
       if (result.error === 'CredentialsSignin') {
         setError('Incorrect email or password.')
+      } else if (result.error === 'EMAIL_NOT_VERIFIED') {
+        setError('Please verify your email before signing in. Check your inbox for the verification link.')
       } else if (result.error === 'OAuthCallback') {
         setError('Authentication error. Please try again.')
       } else {
