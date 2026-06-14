@@ -1,0 +1,75 @@
+name: Release
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      skip_deploy:
+        description: "Build and push only, skip Coolify deploy"
+        required: false
+        default: "false"
+        type: boolean
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
+            type=sha,prefix=,format=long
+
+      - name: Build and push with BuildKit
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=builder
+          cache-to: type=gha,mode=max,scope=builder
+          build-args: |
+            NODE_VERSION=20.11.1
+
+  # ── Optional: trigger Coolify deploy via API ──────────────────────────────
+  # Un-comment and fill in your Coolify API key secret when ready.
+  # Requires: Coolify GitHub App webhook reconnected (see PHASE-4-OPERATION.md)
+  #
+  # deploy-coolify:
+  #   needs: build-and-push
+  #   runs-on: ubuntu-latest
+  #   if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+  #   steps:
+  #     - name: Trigger Coolify deploy
+  #       run: |
+  #         curl -X POST \
+  #           -H "Authorization: Bearer ${{ secrets.COOLIFY_API_KEY }}" \
+  #           -H "Content-Type: application/json" \
+  #           "https://coolify.applabx.com/api/v1/applications/eehzi4dz98bay175wko3wqut/deploy"
+  #         echo "Coolify deploy triggered — monitor at https://coolify.applabx.com"
