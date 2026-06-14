@@ -145,19 +145,23 @@ Coolify reads env vars from its internal database and injects them as `--env` fl
 The `.env` file at `/data/coolify/applications/eehzi4dz98bay175wko3wqut/.env` is overwritten by Coolify on
 restart. **Never edit that .env file directly** — changes are lost on next restart.
 
-To change an env var, use:
-- **UI**: Coolify → postify → Environment → click the variable → Edit
-- **API**: `POST /api/v1/applications/{uuid}/envs/bulk` with JSON body:
-  ```json
-  {"envs": [{"key": "ENABLE_DEV_AUTH", "value": "false", "is_buildtime": false, "is_runtime": true}]}
-  ```
+To change an env var, **use the Coolify UI only**. Coolify regenerates the docker-compose.yaml
+on every restart from its internal database. Filesystem edits to compose or .env are wiped.
 
-Known live env vars (check via `GET /api/v1/applications/{uuid}/envs`):
-| Key | Live Value | Should Be |
+**Coolify UI path:** Coolify → postify → Environment → click the variable → Edit → Save → restart
+
+**API note:** `GET /api/v1/applications/{uuid}/envs` returns metadata but redacts values.
+Known working env UUIDs (prod environment `k13dx34n1a9hj8c3957udaoh`):
+- `ENABLE_DEV_AUTH`: `wyyem7n5wo0phy146i160t7i`
+- `NEXT_PUBLIC_ENABLE_DEV_AUTH`: `coonnk8tcqwcso8xqb241dtl`
+- `DATABASE_URL`: `mr04rr6yilgw17jr2t5vo6tv`
+
+Known live env vars in Coolify DB (currently wrong):
+| Key | Coolify DB Value | Should Be |
 |---|---|---|
-| `ENABLE_DEV_AUTH` | `true` | `false` |
-| `NEXT_PUBLIC_ENABLE_DEV_AUTH` | `true` | `false` |
-| `DATABASE_URL` | `.../postgres` (wrong) | `.../postify` |
+| `ENABLE_DEV_AUTH` | `true` ❌ | `false` |
+| `NEXT_PUBLIC_ENABLE_DEV_AUTH` | `true` ❌ | `false` |
+| `DATABASE_URL` | `.../postgres` ❌ | `.../postify` |
 | `SOURCE_COMMIT` | `cceb9b5e...` | (auto) |
 
 ### ⚠️ Active Production Issues (Phase 4-7 audit, 2026-06-14)
