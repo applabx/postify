@@ -136,6 +136,31 @@ Do not treat `deploy.sh` as production-safe until `prisma db push --accept-data-
 - Domain: `https://postify.applabx.com` (Traefik labels in compose, DNS A record pointing to server IP)
 - Managed PostgreSQL: `mokffvpqs75w6cg3ixyxxzuq`
 - Managed Redis: `xxe3cwi6zi2y7o21xtg09xrk`
+- Current deployed image: `ttl.sh/applabx/postify:latest` (GHCR migration pending — see `release.yml`)
+- Container ID (running): `app-eehzi4dz98bay175wko3wqut-053141859747`
+
+### ⚠️ Active Production Issues (Phase 4-7 audit, 2026-06-14)
+
+1. **Coolify GitHub webhook disconnected** — `is_webhook: false` on every deployment.
+   Coolify doesn't receive push events from GitHub. Fix: Coolify UI → Sources → reconnect GitHub App.
+   Until fixed: manual `POST /api/v1/applications/{uuid}/start` to trigger deploy after push.
+
+2. **`git_commit_sha = "HEAD"` literal string** — Coolify can't detect new commits.
+   Caused by broken webhook above. Result: `requires_build` is always false; Coolify never
+   rebuilds even when source changes.
+
+3. **Redis has no persistence** — BullMQ scheduled jobs are RAM-only.
+   `redis_data` volume is not backed up. Redis crash = all scheduled jobs lost.
+   Fix: add `command: redis-server --appendonly yes` to redis service.
+
+4. **No app-level health endpoint** — `/api/health` returns 403 (Traefik → auth redirect).
+   External uptime monitors can't distinguish app crash from infrastructure issue.
+
+5. **No migration history** — schema applied via `$executeRawUnsafe`, no `_prisma_migrations` entries.
+   `prisma migrate deploy` will fail on existing DB; `deploy.sh` still has `db push --accept-data-loss`.
+
+6. **`NEXT_PUBLIC_ENABLE_DEV_AUTH=true` in container** — exposed in client-side JS bundle.
+   Reveals dev bypass exists. Set to `false` in Coolify `.env`.
 
 ### Coolify env var gotcha
 When setting runtime env vars via `PATCH /applications/{uuid}/envs/bulk`, you MUST include `"is_buildtime": false` AND `"is_runtime": true`. If `is_runtime` is missing, the var only applies at build time. This caused NEXTAUTH_SECRET, AUTH_USE_PRISMA_ADAPTER, and ENABLE_DEV_AUTH to silently not work.
@@ -145,8 +170,9 @@ For local/dev testing without Google OAuth: set `ENABLE_DEV_AUTH=true` + `AUTH_U
 
 ## Current Operational Notes
 
-- This folder currently is not a Git repository according to `git status`.
-- Current `.env` contains the required key names, including `TOKEN_ENCRYPTION_KEY`, but values were not inspected.
-- Google login is documented, but active auth is still dev credentials-driven.
-- Scheduling is fragile until Bull processing is moved out of the web process.
-- README and older handoff notes can drift; verify against live files before acting.
+- `.github/workflows/release.yml` added (GHCR workflow) — needs push via `gh api` or PAT with `workflow` scope.
+- Production auth confirmed working: `ENABLE_DEV_AUTH=false`, real Google auth (dev credentials).
+- Full ops docs: `PRODUCTION_SUMMARY.md`, `PHASE-4-OPERATION.md`, `PHASE-5-7-OPERATION.md`.
+- Scheduling runs in web process (Bull processor imported at module load); see `lib/scheduler.ts`.
+- Coolify owns `docker-compose.yaml` at `/data/coolify/applications/eehzi4dz98bay175wko3wqut/docker-compose.yaml` — do not edit the one in GitHub directly.
+- `.env` is gitignored but committed in git history of older repos; always check `git log --all --full-history -- **/.env` before assuming a file is clean.
