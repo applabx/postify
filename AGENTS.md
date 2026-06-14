@@ -136,8 +136,29 @@ Do not treat `deploy.sh` as production-safe until `prisma db push --accept-data-
 - Domain: `https://postify.applabx.com` (Traefik labels in compose, DNS A record pointing to server IP)
 - Managed PostgreSQL: `mokffvpqs75w6cg3ixyxxzuq`
 - Managed Redis: `xxe3cwi6zi2y7o21xtg09xrk`
-- Current deployed image: `ttl.sh/applabx/postify:latest` (GHCR migration pending — see `release.yml`)
-- Container ID (running): `app-eehzi4dz98bay175wko3wqut-053141859747`
+- Current deployed image: `ttl.sh/applabx/postify:latest` (GHCR migration in progress — see `release.yml`)
+- Container IDs change on every restart; always find current with `docker ps | grep "app-eehzi4dz98bay175wko3wqut-"`
+
+### ⚠️ Critical: Coolify env vars are in Coolify's DB, NOT the .env file
+
+Coolify reads env vars from its internal database and injects them as `--env` flags into containers.
+The `.env` file at `/data/coolify/applications/eehzi4dz98bay175wko3wqut/.env` is overwritten by Coolify on
+restart. **Never edit that .env file directly** — changes are lost on next restart.
+
+To change an env var, use:
+- **UI**: Coolify → postify → Environment → click the variable → Edit
+- **API**: `POST /api/v1/applications/{uuid}/envs/bulk` with JSON body:
+  ```json
+  {"envs": [{"key": "ENABLE_DEV_AUTH", "value": "false", "is_buildtime": false, "is_runtime": true}]}
+  ```
+
+Known live env vars (check via `GET /api/v1/applications/{uuid}/envs`):
+| Key | Live Value | Should Be |
+|---|---|---|
+| `ENABLE_DEV_AUTH` | `true` | `false` |
+| `NEXT_PUBLIC_ENABLE_DEV_AUTH` | `true` | `false` |
+| `DATABASE_URL` | `.../postgres` (wrong) | `.../postify` |
+| `SOURCE_COMMIT` | `cceb9b5e...` | (auto) |
 
 ### ⚠️ Active Production Issues (Phase 4-7 audit, 2026-06-14)
 
