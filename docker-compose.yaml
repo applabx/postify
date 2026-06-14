@@ -40,7 +40,7 @@ services:
   #   build: .
   # When Coolify build server is enabled, it will build from source.
   app:
-    image: ttl.sh/applabx/postify:latest
+    image: ttl.sh/applabx/postify:authfix
     pull_policy: always
     restart: unless-stopped
     environment:
