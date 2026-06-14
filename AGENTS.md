@@ -136,7 +136,9 @@ Do not treat `deploy.sh` as production-safe until `prisma db push --accept-data-
 - Domain: `https://postify.applabx.com` (Traefik labels in compose, DNS A record pointing to server IP)
 - Managed PostgreSQL: `mokffvpqs75w6cg3ixyxxzuq`
 - Managed Redis: `xxe3cwi6zi2y7o21xtg09xrk`
-- Current deployed image: `ttl.sh/applabx/postify:latest` (GHCR migration in progress — see `release.yml`)
+- Current deployed image: `ghcr.io/applabx/postify:latest` (also at `ttl.sh/applabx/postify:latest`)
+- GHCR confirmed working: Coolify SSH daemon can pull from GHCR (root's Docker config has GHCR auth)
+- See `release.yml` for automated GHCR build + push on master push
 - Container IDs change on every restart; always find current with `docker ps | grep "app-eehzi4dz98bay175wko3wqut-"`
 
 ### ⚠️ Critical: Coolify env vars are in Coolify's DB, NOT the .env file
@@ -156,13 +158,16 @@ Known working env UUIDs (prod environment `k13dx34n1a9hj8c3957udaoh`):
 - `NEXT_PUBLIC_ENABLE_DEV_AUTH`: `coonnk8tcqwcso8xqb241dtl`
 - `DATABASE_URL`: `mr04rr6yilgw17jr2t5vo6tv`
 
-Known live env vars in Coolify DB (currently wrong):
-| Key | Coolify DB Value | Should Be |
+Known live env vars in Coolify DB (all correct as of 2026-06-14):
+| Key | Value | Status |
 |---|---|---|
-| `ENABLE_DEV_AUTH` | `true` ❌ | `false` |
-| `NEXT_PUBLIC_ENABLE_DEV_AUTH` | `true` ❌ | `false` |
-| `DATABASE_URL` | `.../postgres` ❌ | `.../postify` |
-| `SOURCE_COMMIT` | `cceb9b5e...` | (auto) |
+| `ENABLE_DEV_AUTH` | `false` | ✅ Fixed |
+| `NEXT_PUBLIC_ENABLE_DEV_AUTH` | `false` | ✅ Fixed |
+| `DATABASE_URL` | `postgres://postgres:...@mokffvpqs75w6cg3ixyxxzuq:5432/postify` (Coolify managed PG) | ✅ Fixed |
+| `SOURCE_COMMIT` | `a7ce662c` | ✅ |
+
+> **DATABASE_URL note:** Uses Coolify's managed PostgreSQL (`mokffvpqs75w6cg3ixyxxzuq`), NOT Neon directly.
+> The Neon hostname `ep-royal-bush-...neon.tech` (without `.aws.` region) does NOT resolve — do NOT set DATABASE_URL to a Neon direct connection string.
 
 ### ⚠️ Active Production Issues (Phase 4-7 audit, 2026-06-14)
 
@@ -184,8 +189,14 @@ Known live env vars in Coolify DB (currently wrong):
 5. **No migration history** — schema applied via `$executeRawUnsafe`, no `_prisma_migrations` entries.
    `prisma migrate deploy` will fail on existing DB; `deploy.sh` still has `db push --accept-data-loss`.
 
-6. **`NEXT_PUBLIC_ENABLE_DEV_AUTH=true` in container** — exposed in client-side JS bundle.
-   Reveals dev bypass exists. Set to `false` in Coolify `.env`.
+6. **`ENABLE_DEV_AUTH` hardcoded in compose YAML** — `environment: ENABLE_DEV_AUTH: 'true'`
+   in `docker-compose.yaml` line 86 overrode `.env` and blocked the env fix. Removed manually.
+   Verify: `grep ENABLE_DEV_AUTH /data/coolify/applications/eehzi4dz98bay175wko3wqut/docker-compose.yaml` — should return nothing.
+
+### ✅ Fixed Issues
+- Env vars (`ENABLE_DEV_AUTH`, `NEXT_PUBLIC_ENABLE_DEV_AUTH`, `DATABASE_URL`) all corrected and verified.
+  Note: Coolify regenerates compose on restart; DB is now correct but filesystem `docker-compose.yaml` was
+  manually patched. If Coolify UI ever re-saves the compose with stale values, re-patch the YAML.
 
 ### Coolify env var gotcha
 When setting runtime env vars via `PATCH /applications/{uuid}/envs/bulk`, you MUST include `"is_buildtime": false` AND `"is_runtime": true`. If `is_runtime` is missing, the var only applies at build time. This caused NEXTAUTH_SECRET, AUTH_USE_PRISMA_ADAPTER, and ENABLE_DEV_AUTH to silently not work.
@@ -195,9 +206,11 @@ For local/dev testing without Google OAuth: set `ENABLE_DEV_AUTH=true` + `AUTH_U
 
 ## Current Operational Notes
 
-- `.github/workflows/release.yml` added (GHCR workflow) — needs push via `gh api` or PAT with `workflow` scope.
-- Production auth confirmed working: `ENABLE_DEV_AUTH=false`, real Google auth (dev credentials).
-- Full ops docs: `PRODUCTION_SUMMARY.md`, `PHASE-4-OPERATION.md`, `PHASE-5-7-OPERATION.md`.
+- Production auth LIVE: `ENABLE_DEV_AUTH=false`, `NEXT_PUBLIC_ENABLE_DEV_AUTH=false` — real Google OAuth, dev bypass blocked.
+- DB connected to Coolify managed PostgreSQL (`mokffvpqs75w6cg3ixyxxzuq`), 3 users confirmed.
+- GHCR workflow active: every master push builds `ghcr.io/applabx/postify:{sha}` + `latest`.
+- Full ops docs: `PRODUCTION_SUMMARY.md`, `PHASE-4-OPERATION.md`, `PHASE-5-7-OPERATION.md`, `PRODUCTION_SAFETY_REPORT.md`.
 - Scheduling runs in web process (Bull processor imported at module load); see `lib/scheduler.ts`.
 - Coolify owns `docker-compose.yaml` at `/data/coolify/applications/eehzi4dz98bay175wko3wqut/docker-compose.yaml` — do not edit the one in GitHub directly.
 - `.env` is gitignored but committed in git history of older repos; always check `git log --all --full-history -- **/.env` before assuming a file is clean.
+- Coolify env API: `PATCH /api/v1/applications/{uuid}/envs` with body `{"key":"...", "value":"...", "is_preview":false}`. Does NOT regenerate compose on restart — must manually patch compose YAML or use `docker compose up --force-recreate`.

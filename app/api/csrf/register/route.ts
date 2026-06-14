@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import crypto from 'crypto'
 
-const CSRF_COOKIE = 'csrf_register'
+const CSRF_COOKIE = 'csrf_register_v2'
 const CSRF_MAX_AGE = 10 * 60 // 10 minutes
 
 export async function GET() {

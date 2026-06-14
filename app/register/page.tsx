@@ -2,7 +2,7 @@
 
 import { signIn } from 'next-auth/react'
 import { useSearchParams } from 'next/navigation'
-import { Suspense, useState } from 'react'
+import { Suspense, useState, useEffect } from 'react'
 
 export default function RegisterPage() {
   return (
@@ -22,6 +22,15 @@ function RegisterContent() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+  const [csrfToken, setCsrfToken] = useState('')
+
+  // Fetch CSRF token on mount so the httpOnly cookie is set before submit
+  useEffect(() => {
+    fetch('/api/csrf/register')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.csrfToken) setCsrfToken(d.csrfToken) })
+      .catch(() => {})
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -29,15 +38,19 @@ function RegisterContent() {
     setError('')
 
     try {
-      // Fetch CSRF token first (sets httpOnly cookie)
-      const csrfRes = await fetch('/api/auth/register/start')
-      if (!csrfRes.ok) throw new Error('Failed to initialise request')
-      const { csrfToken } = await csrfRes.json()
+      // Refresh CSRF token on submit (sets fresh httpOnly cookie)
+      let token = csrfToken
+      const csrfRes = await fetch('/api/csrf/register')
+      if (csrfRes.ok) {
+        const d = await csrfRes.json()
+        token = d.csrfToken
+        setCsrfToken(token)
+      }
 
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ csrfToken, email, password, name }),
+        body: JSON.stringify({ csrfToken: token, email, password, name }),
       })
       const data = await res.json()
 

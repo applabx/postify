@@ -8,7 +8,7 @@ import crypto from 'crypto'
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const MIN_PASSWORD_LENGTH = 8
-const CSRF_COOKIE = 'csrf_register'
+const CSRF_COOKIE = 'csrf_register_v2'
 
 export async function POST(req: NextRequest) {
   try {
