@@ -30,12 +30,12 @@ export async function GET(
 
   switch (platform) {
     case 'linkedin': {
-      const url = getLinkedInAuthUrl(state, req.nextUrl.origin)
+      const url = getLinkedInAuthUrl(state, process.env.NEXT_PUBLIC_APP_URL)
       return response(url, platform)
     }
 
     case 'meta': {
-      const url = getMetaAuthUrl(state, req.nextUrl.origin)
+      const url = getMetaAuthUrl(state, process.env.NEXT_PUBLIC_APP_URL)
       return response(url, platform)
     }
 
