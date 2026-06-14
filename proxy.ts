@@ -24,3 +24,4 @@ export const config = {
     '/((?!login|register|forgot-password|reset-password|api/auth/callback|api/auth/csrf|api/csrf|_next/static|_next/image|favicon.ico|api/health).*)',
   ],
 }
+# Phase 8B security deployment — 2026-06-15
