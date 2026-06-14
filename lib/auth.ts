@@ -243,7 +243,10 @@ export const authOptions: NextAuthOptions = {
           if (!user.emailVerified) {
             await clearRateLimit(rlKey)
             console.warn(`[Auth] Login blocked — email not verified: ${creds.email}`)
-            throw new Error('EMAIL_NOT_VERIFIED')
+            // Use CredentialsSignin so NextAuth preserves the error redirect
+            // (NextAuth only passes through CredentialsSignin; all other thrown
+            // errors get swallowed into a generic error=credentials redirect)
+            throw new Error('CredentialsSignin')
           }
 
           // Success — reset failed attempts, clear rate limit
