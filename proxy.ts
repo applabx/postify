@@ -28,7 +28,7 @@ function isPublicPath(pathname: string): boolean {
   return false
 }
 
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   // Explicitly allow public paths — no auth needed
   if (isPublicPath(req.nextUrl.pathname)) {
     return NextResponse.next()
@@ -49,7 +49,7 @@ export async function middleware(req: NextRequest) {
   return NextResponse.next()
 }
 
-// Apply middleware to all paths EXCEPT public ones
+// Apply to all paths except public ones
 export const config = {
   matcher: [
     '/((?!login|register|forgot-password|reset-password|api/auth/callback|api/auth/csrf|api/csrf|_next/static|_next/image|favicon.ico|api/health).*)',
