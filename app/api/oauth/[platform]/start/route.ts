@@ -30,13 +30,8 @@ export async function GET(
 
   switch (platform) {
     case 'linkedin': {
-      // DEBUG: return env values as JSON instead of redirecting
-      // Remove this case once diagnosed
-      return NextResponse.json({
-        client_id: process.env.LINKEDIN_CLIENT_ID ?? 'MISSING',
-        client_secret_set: !!process.env.LINKEDIN_CLIENT_SECRET,
-        app_url: process.env.NEXT_PUBLIC_APP_URL ?? 'MISSING',
-      })
+      const url = getLinkedInAuthUrl(state, process.env.NEXT_PUBLIC_APP_URL)
+      return response(url, platform)
     }
 
     case 'meta': {
