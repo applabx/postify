@@ -17,7 +17,7 @@ export default withAuth(
 
 // Protect everything except:
 // - Public auth pages (register, forgot-password, reset-password)
-// - NextAuth API routes
+// - NextAuth API routes and CSRF endpoints
 // - Static assets and health checks
 export const config = {
   matcher: [
