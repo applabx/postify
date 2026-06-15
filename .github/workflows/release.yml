@@ -57,11 +57,6 @@ jobs:
           build-args: |
             NODE_VERSION=20.11.1
 
-import json,sys
-d=json.load(sys.stdin)
-print('visibility:', d.get('visibility','error: '+str(d)[:200]))
-"
-
   # ── Optional: trigger Coolify deploy via API ──────────────────────────────
   # Un-comment and fill in your Coolify API key secret when ready.
   # Requires: Coolify GitHub App webhook reconnected (see PHASE-4-OPERATION.md)
