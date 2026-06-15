@@ -1,24 +1,55 @@
-import { withAuth } from 'next-auth/middleware'
 import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
+import { getToken } from 'next-auth/jwt'
 
-export default withAuth(
-  function middleware(req) {
-    return NextResponse.next()
-  },
-  {
-    callbacks: {
-      authorized: ({ token }) => !!token,
-    },
-    pages: {
-      signIn: '/login',
-    },
+const PUBLIC_PATHS = [
+  '/login',
+  '/register',
+  '/forgot-password',
+  '/reset-password',
+]
+
+const PUBLIC_PREFIXES = [
+  '/api/auth/',
+  '/api/csrf',
+  '/_next/static',
+  '/_next/image',
+  '/favicon.ico',
+  '/api/health',
+]
+
+function isPublicPath(pathname: string): boolean {
+  if (PUBLIC_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'))) {
+    return true
   }
-)
+  if (PUBLIC_PREFIXES.some(p => pathname.startsWith(p))) {
+    return true
+  }
+  return false
+}
 
-// Protect everything except:
-// - Public auth pages (register, forgot-password, reset-password)
-// - NextAuth API routes and CSRF endpoints
-// - Static assets and health checks
+export async function middleware(req: NextRequest) {
+  // Explicitly allow public paths — no auth needed
+  if (isPublicPath(req.nextUrl.pathname)) {
+    return NextResponse.next()
+  }
+
+  // Check for a valid session token
+  const token = await getToken({
+    req,
+    secret: process.env.NEXTAUTH_SECRET,
+  })
+
+  if (!token) {
+    const loginUrl = new URL('/login', req.url)
+    loginUrl.searchParams.set('callbackUrl', req.nextUrl.pathname)
+    return NextResponse.redirect(loginUrl)
+  }
+
+  return NextResponse.next()
+}
+
+// Apply middleware to all paths EXCEPT public ones
 export const config = {
   matcher: [
     '/((?!login|register|forgot-password|reset-password|api/auth/callback|api/auth/csrf|api/csrf|_next/static|_next/image|favicon.ico|api/health).*)',
