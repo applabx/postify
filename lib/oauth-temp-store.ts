@@ -11,6 +11,15 @@ export function storeOAuthData(data: unknown): string {
   return key
 }
 
+export function peekOAuthData<T>(key: string): T | null {
+  const entry = store.get(key)
+  if (!entry || Date.now() > entry.expiresAt) {
+    store.delete(key)
+    return null
+  }
+  return entry.data as T
+}
+
 export function consumeOAuthData<T>(key: string): T | null {
   const entry = store.get(key)
   if (!entry || Date.now() > entry.expiresAt) {

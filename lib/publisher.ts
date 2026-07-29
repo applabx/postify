@@ -39,9 +39,15 @@ export async function publishPost(postId: string): Promise<PublishResult> {
     data: { status: 'PUBLISHING' },
   })
 
-  // Publish to each target in parallel (with individual error handling)
+  // Skip targets already marked SUCCESS (prevents duplicate publish on Bull retry)
+  const pendingTargets = post.targets.filter((t: any) => t.status !== 'SUCCESS')
+  if (pendingTargets.length === 0) {
+    return { postId, successCount: post.targets.filter((t: any) => t.status === 'SUCCESS').length, failCount: 0, totalTargets: post.targets.length }
+  }
+
+  // Publish to each pending target in parallel (with individual error handling)
   const results = await Promise.allSettled(
-    post.targets.map((target: any) => publishToTarget(post.text, post.mediaUrls, post.mediaTypes, target))
+    pendingTargets.map((target: any) => publishToTarget(post.text, post.mediaUrls, post.mediaTypes, target))
   )
 
   // Tally results
@@ -104,9 +110,12 @@ async function publishToTarget(
 
   switch (acc.platform) {
     case 'LINKEDIN':
+      if (!acc.pageId) {
+        throw new Error('LinkedIn personal accounts cannot publish via UGC API. Use a LinkedIn Page instead.')
+      }
       return postToLinkedIn({
         accessToken,
-        organizationUrn: acc.pageId!, // urn:li:organization:XXXXX
+        organizationUrn: acc.pageId,
         text,
       })
 

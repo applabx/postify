@@ -1,6 +1,7 @@
 import Bull from 'bull'
 import { prisma } from './prisma'
 import { publishPost } from './publisher'
+import './env'  // startup env validation (runs on import)
 
 // ─── Queue setup ─────────────────────────────────────────────────────────────
 let publishQueue: Bull.Queue | null = null
@@ -50,8 +51,11 @@ export function getPublishQueue(): Bull.Queue {
 
 // ─── Scheduled-job reconciliation ────────────────────────────────────────────
 // Recreates BullMQ jobs for SCHEDULED posts that are missing from Redis.
+// Recovers posts stuck in PUBLISHING state for more than 30 minutes.
 // Safe to run on every startup: uses deterministic jobIds (post:<postId>),
 // so duplicate jobs are never created.
+
+const STUCK_PUBLISH_TIMEOUT_MS = 30 * 60 * 1000
 
 async function reconcileScheduledJobs(): Promise<void> {
   const queue = getPublishQueue()
@@ -108,6 +112,53 @@ async function reconcileScheduledJobs(): Promise<void> {
     console.log(
       `[Scheduler] Reconciliation done: ${recovered} recovered, ${skipped} skipped, ${failed} failed`
     )
+
+    // ─── Recover stuck PUBLISHING posts ────────────────────────────────────
+    const stuckThreshold = new Date(Date.now() - STUCK_PUBLISH_TIMEOUT_MS)
+    const stuckPosts = await prisma.post.findMany({
+      where: {
+        status: 'PUBLISHING',
+        updatedAt: { lt: stuckThreshold },
+      },
+      include: {
+        targets: {
+          where: { status: 'PENDING' },
+        },
+      },
+    })
+
+    for (const post of stuckPosts) {
+      try {
+        // Mark stuck PENDING targets as FAILED
+        for (const target of post.targets) {
+          await prisma.postTarget.update({
+            where: { id: target.id },
+            data: {
+              status: 'FAILED',
+              errorMessage: 'Publish timed out — container may have restarted',
+            },
+          })
+        }
+
+        // Update post status: PARTIAL if some targets succeeded, FAILED otherwise
+        const successCount = await prisma.postTarget.count({
+          where: { postId: post.id, status: 'SUCCESS' },
+        })
+        const finalStatus = successCount > 0 ? 'PARTIAL' : 'FAILED'
+        await prisma.post.update({
+          where: { id: post.id },
+          data: { status: finalStatus },
+        })
+
+        console.log(`[Scheduler] Recovered stuck PUBLISHING post ${post.id} → ${finalStatus} (${successCount} succeeded)`)
+      } catch (err) {
+        console.error(`[Scheduler] Failed to recover stuck post ${post.id}:`, err)
+      }
+    }
+
+    if (stuckPosts.length > 0) {
+      console.log(`[Scheduler] Recovered ${stuckPosts.length} stuck PUBLISHING posts`)
+    }
   } catch (err) {
     // Redis or DB unavailable — log and continue without crashing the app
     console.error('[Scheduler] Reconciliation skipped (Redis or DB unavailable):', err)

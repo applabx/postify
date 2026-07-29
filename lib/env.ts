@@ -9,6 +9,7 @@ const REQUIRED_FOR_ALL = [
   'NEXTAUTH_URL',
   'NEXTAUTH_SECRET',
   'TOKEN_ENCRYPTION_KEY',
+  'CRON_SECRET',
 ]
 
 const PLATFORM_REQUIRED: Record<string, string[]> = {

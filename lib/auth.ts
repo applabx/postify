@@ -220,6 +220,13 @@ export const authOptions: NextAuthOptions = {
             return null
           }
 
+          // Block login while account is locked
+          if (user.lockedUntil && user.lockedUntil > new Date()) {
+            const remaining = Math.ceil((user.lockedUntil.getTime() - Date.now()) / 60000)
+            console.warn(`[Auth] Login blocked — account locked for ${creds.email}, ${remaining}min remaining`)
+            throw new Error('CredentialsSignin')
+          }
+
           const passwordMatch = await bcrypt.compare(creds.password, user.passwordHash)
           if (!passwordMatch) {
             // Increment failed login count
