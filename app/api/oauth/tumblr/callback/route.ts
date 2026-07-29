@@ -3,8 +3,9 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getTumblrBlogs } from '@/lib/oauth/platforms'
 import axios from 'axios'
-import { createHmac } from 'crypto'
+import { createHmac, randomBytes } from 'crypto'
 import { isValidOAuthState, clearOAuthStateCookie } from '@/lib/oauth-state'
+import { storeOAuthData } from '@/lib/oauth-temp-store'
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -34,16 +35,14 @@ export async function GET(req: NextRequest) {
     const blogs = await getTumblrBlogs(tokens.accessToken, tokens.accessTokenSecret) as any[]
 
     // Pass to blog picker
-    const pendingData = Buffer.from(
-      JSON.stringify({
-        accessToken: tokens.accessToken,
-        accessTokenSecret: tokens.accessTokenSecret,
-        blogs,
-      })
-    ).toString('base64url')
+    const key = storeOAuthData({
+      accessToken: tokens.accessToken,
+      accessTokenSecret: tokens.accessTokenSecret,
+      blogs,
+    })
 
     const res = NextResponse.redirect(
-      new URL(`/accounts/connect/tumblr?data=${pendingData}`, req.url)
+      new URL(`/accounts/connect/tumblr?key=${key}`, req.url)
     )
     clearOAuthStateCookie(res, 'tumblr')
     return res
@@ -58,7 +57,7 @@ async function exchangeTumblrToken(
   oauthVerifier: string
 ): Promise<{ accessToken: string; accessTokenSecret: string }> {
   const timestamp = Math.floor(Date.now() / 1000).toString()
-  const nonce = Math.random().toString(36).substring(2)
+  const nonce = randomBytes(16).toString('hex')
 
   const params: Record<string, string> = {
     oauth_consumer_key: process.env.TUMBLR_CONSUMER_KEY!,

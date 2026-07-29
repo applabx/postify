@@ -96,12 +96,6 @@ export default function ComposePage() {
       .then(r => r.json())
       .then(data => {
         setAccounts(data.grouped || {})
-        // Auto-select all non-expired accounts
-        const ids = new Set<string>()
-        Object.values(data.accounts || []).forEach((acc: any) => {
-          if (!acc.isExpired) ids.add(acc.id)
-        })
-        setSelectedAccountIds(ids)
       })
       .catch(console.error)
   }, [status])
@@ -147,7 +141,7 @@ export default function ComposePage() {
     }
 
     if (schedule) {
-      const dt = new Date(`${scheduledAt}T${scheduledTime}:00`)
+      const dt = new Date(`${scheduledAt}T${scheduledTime}:00+07:00`)
       if (isNaN(dt.getTime())) { setResult({ type: 'error', msg: 'Invalid schedule date/time.' }); setPublishing(false); return }
       body.scheduledAt = dt.toISOString()
     }
@@ -168,6 +162,7 @@ export default function ComposePage() {
       } else if (data.status === 'published') {
         setResult({ type: 'success', msg: `Published to all ${data.successCount} destination${data.successCount !== 1 ? 's' : ''} successfully.` })
         setText('')
+        setMediaUrls([])
       } else if (data.status === 'partial') {
         setResult({ type: 'partial', msg: `Published to ${data.successCount} of ${data.totalTargets} destinations. ${data.failCount} failed.` })
       } else {

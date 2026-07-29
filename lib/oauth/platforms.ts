@@ -87,6 +87,18 @@ export async function authenticateBluesky(handle: string, appPassword: string) {
   }
 }
 
+export async function refreshBlueskySession(refreshJwt: string) {
+  const res = await axios.post(
+    `${BLUESKY_API}/com.atproto.server.refreshSession`,
+    null,
+    { headers: { Authorization: `Bearer ${refreshJwt}` } }
+  )
+  return {
+    accessJwt: res.data.accessJwt,
+    refreshJwt: res.data.refreshJwt,
+  }
+}
+
 export async function postToBluesky(params: {
   did: string
   accessJwt: string

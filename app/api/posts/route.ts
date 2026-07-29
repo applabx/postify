@@ -13,6 +13,11 @@ const CreatePostSchema = z.object({
   scheduledAt: z.string().datetime().optional(), // ISO string if scheduling
 })
 
+function detectMediaType(url: string): 'image' | 'video' {
+  const ext = url.split('.').pop()?.toLowerCase() || ''
+  return /^(mp4|mov|avi|webm|mkv|quicktime)$/.test(ext) ? 'video' : 'image'
+}
+
 // ─── POST /api/posts ──────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -37,6 +42,14 @@ export async function POST(req: NextRequest) {
 
   const { text, mediaUrls, targetAccountIds, scheduledAt } = parsed.data
 
+  // Validate schedule is in the future
+  if (scheduledAt && new Date(scheduledAt) <= new Date()) {
+    return NextResponse.json(
+      { error: 'Schedule time must be in the future' },
+      { status: 400 }
+    )
+  }
+
   // Verify all target accounts belong to this user
   const accounts = await prisma.socialAccount.findMany({
     where: {
@@ -59,7 +72,7 @@ export async function POST(req: NextRequest) {
       userId: session.user.id,
       text,
       mediaUrls,
-      mediaTypes: mediaUrls.map(() => 'image'),
+      mediaTypes: mediaUrls.map(detectMediaType),
       status: scheduledAt ? 'SCHEDULED' : 'PUBLISHING',
       scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
       targets: {

@@ -4,21 +4,8 @@ import { authOptions } from '@/lib/auth'
 import { getInstagramAccount, getThreadsProfile } from '@/lib/oauth/meta'
 import { prisma } from '@/lib/prisma'
 import { encryptSecret } from '@/lib/secrets'
-
-async function ensureSessionUser(session: { user: { id: string; email?: string | null; name?: string | null } }) {
-  await prisma.user.upsert({
-    where: { id: session.user.id },
-    update: {
-      email: session.user.email ?? undefined,
-      name: session.user.name ?? undefined,
-    },
-    create: {
-      id: session.user.id,
-      email: session.user.email ?? `${session.user.id}@local.invalid`,
-      name: session.user.name ?? session.user.id,
-    },
-  })
-}
+import { consumeOAuthData } from '@/lib/oauth-temp-store'
+import { ensureSessionUser } from '@/lib/session-user'
 
 type MetaPage = {
   id: string
@@ -43,21 +30,24 @@ export async function POST(req: NextRequest) {
 
   await ensureSessionUser(session as { user: { id: string; email?: string | null; name?: string | null } })
 
-  const {
-    accessToken,
-    selectedPageIds,
-    selectedGroupIds,
-    connectInstagram,
-    allPages,
-    allGroups,
-  } = await req.json() as {
-    accessToken: string
+  const body = await req.json() as {
+    key: string
     selectedPageIds: string[]
     selectedGroupIds: string[]
     connectInstagram: boolean
-    allPages: MetaPage[]
-    allGroups: MetaGroup[]
   }
+  const { key, selectedPageIds, selectedGroupIds, connectInstagram } = body
+
+  const pending = consumeOAuthData<{
+    accessToken: string
+    pages: MetaPage[]
+    groups: MetaGroup[]
+  }>(key)
+  if (!pending) {
+    return NextResponse.json({ error: 'Session expired. Please reconnect Meta.' }, { status: 400 })
+  }
+
+  const { accessToken, pages: allPages, groups: allGroups } = pending
 
   const saved: string[] = []
   const encryptedAccessToken = encryptSecret(accessToken)

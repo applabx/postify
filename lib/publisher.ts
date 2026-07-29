@@ -7,7 +7,7 @@ import {
   postToInstagram,
   postToThreads,
 } from '@/lib/oauth/meta'
-import { postTweet, postToBluesky, postToPinterest, postToTumblr } from "@/lib/oauth/platforms"
+import { postTweet, postToBluesky, postToPinterest, postToTumblr, uploadBlueskyBlob } from "@/lib/oauth/platforms"
 
 type SocialAccount = {
   id: string; platform: string; accountType: string; externalId: string
@@ -41,7 +41,7 @@ export async function publishPost(postId: string): Promise<PublishResult> {
 
   // Publish to each target in parallel (with individual error handling)
   const results = await Promise.allSettled(
-    post.targets.map((target: any) => publishToTarget(post.text, post.mediaUrls, target))
+    post.targets.map((target: any) => publishToTarget(post.text, post.mediaUrls, post.mediaTypes, target))
   )
 
   // Tally results
@@ -94,6 +94,7 @@ export async function publishPost(postId: string): Promise<PublishResult> {
 async function publishToTarget(
   text: string,
   mediaUrls: string[],
+  mediaTypes: string[],
   target: PostTarget & { socialAccount: SocialAccount }
 ): Promise<string> {
   const acc = target.socialAccount
@@ -134,6 +135,8 @@ async function publishToTarget(
         pageAccessToken: pageToken || accessToken,
         caption: text,
         mediaUrl: mediaUrls[0],
+        mediaUrls,
+        mediaType: mediaUrls.length > 1 ? 'CAROUSEL' : mediaTypes[0] === 'video' ? 'VIDEO' : 'IMAGE',
       })
 
     case 'TWITTER':
@@ -147,12 +150,30 @@ async function publishToTarget(
         mediaUrl: mediaUrls[0],
       })
 
-    case 'BLUESKY':
+    case 'BLUESKY': {
+      let imageBlobs: Array<{ blob: any; alt: string }> | undefined
+      if (mediaUrls.length > 0) {
+        imageBlobs = await Promise.all(
+          mediaUrls.map(async (url) => {
+            const imageRes = await fetch(url)
+            const buffer = Buffer.from(await imageRes.arrayBuffer())
+            const mimeType = imageRes.headers.get('content-type') || 'image/jpeg'
+            const blob = await uploadBlueskyBlob({
+              accessJwt: accessToken,
+              imageBuffer: buffer,
+              mimeType,
+            })
+            return { blob, alt: '' }
+          })
+        )
+      }
       return postToBluesky({
         did: acc.externalId,
         accessJwt: accessToken,
         text,
+        imageBlobs,
       })
+    }
 
     case 'PINTEREST':
       if (!mediaUrls.length) throw new Error('Pinterest requires an image')

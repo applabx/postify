@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { getLinkedInAuthUrl } from '@/lib/oauth/linkedin'
 import { getMetaAuthUrl } from '@/lib/oauth/meta'
 import { getTwitterAuthUrl, getPinterestAuthUrl } from '@/lib/oauth/platforms'
-import { randomBytes, createHash } from 'crypto'
+import { randomBytes, createHash, createHmac } from 'crypto'
 import { setOAuthStateCookie } from '@/lib/oauth-state'
 
 // GET /api/oauth/[platform]/start
@@ -79,32 +79,46 @@ export async function GET(
 async function getTumblrRequestToken(state: string): Promise<string> {
   const axios = (await import('axios')).default
 
-  // Build OAuth 1.0a signature for request token
   const timestamp = Math.floor(Date.now() / 1000).toString()
   const nonce = randomBytes(16).toString('hex')
-  const callbackUrl = encodeURIComponent(`${process.env.NEXT_PUBLIC_APP_URL}/api/oauth/tumblr/callback?state=${state}`)
+  const callbackUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/oauth/tumblr/callback?state=${state}`
+
+  const params: Record<string, string> = {
+    oauth_callback: callbackUrl,
+    oauth_consumer_key: process.env.TUMBLR_CONSUMER_KEY!,
+    oauth_nonce: nonce,
+    oauth_signature_method: 'HMAC-SHA1',
+    oauth_timestamp: timestamp,
+    oauth_version: '1.0',
+  }
+
+  const baseString = [
+    'POST',
+    encodeURIComponent('https://www.tumblr.com/oauth/request_token'),
+    encodeURIComponent(
+      Object.keys(params).sort().map(k => `${k}=${params[k]}`).join('&')
+    ),
+  ].join('&')
+
+  const signingKey = `${encodeURIComponent(process.env.TUMBLR_CONSUMER_SECRET!)}&`
+  const signature = createHmac('sha1', signingKey).update(baseString).digest('base64')
+  params.oauth_signature = signature
+
+  const authHeader =
+    'OAuth ' +
+    Object.keys(params).sort().map(k => `${k}="${encodeURIComponent(params[k])}"`).join(', ')
 
   const res = await axios.post(
     'https://www.tumblr.com/oauth/request_token',
     null,
-    {
-      params: {
-        oauth_callback: decodeURIComponent(callbackUrl),
-        oauth_consumer_key: process.env.TUMBLR_CONSUMER_KEY,
-        oauth_nonce: nonce,
-        oauth_signature_method: 'HMAC-SHA1',
-        oauth_timestamp: timestamp,
-        oauth_version: '1.0',
-      },
-    }
+    { headers: { Authorization: authHeader } }
   ).catch(() => null)
 
   if (!res?.data) {
-    // Fallback if request token fails — redirect to accounts with error
     return `${process.env.NEXT_PUBLIC_APP_URL}/accounts?error=tumblr_init_failed`
   }
 
-  const params = new URLSearchParams(res.data)
-  const oauthToken = params.get('oauth_token')
+  const resultParams = new URLSearchParams(res.data)
+  const oauthToken = resultParams.get('oauth_token')
   return `https://www.tumblr.com/oauth/authorize?oauth_token=${oauthToken}`
 }

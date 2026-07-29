@@ -1,6 +1,7 @@
 import { prisma } from './prisma'
 import axios from 'axios'
 import { decryptSecret, encryptSecret } from './secrets'
+import { refreshBlueskySession } from './oauth/platforms'
 
 // Run this on a cron job daily: refreshes tokens expiring within 7 days
 export async function refreshExpiringTokens() {
@@ -26,6 +27,8 @@ export async function refreshExpiringTokens() {
         await refreshTwitterToken(account.id, decryptSecret(account.refreshToken!))
       } else if (account.platform === 'PINTEREST') {
         await refreshPinterestToken(account.id, decryptSecret(account.refreshToken!))
+      } else if (account.platform === 'BLUESKY') {
+        await refreshBlueskyToken(account.id, decryptSecret(account.refreshToken!))
       }
     } catch (err: any) {
       console.error(`[TokenRefresh] Failed for account ${account.id} (${account.platform}):`, err.message)
@@ -124,4 +127,19 @@ async function refreshPinterestToken(accountId: string, refreshToken: string) {
     },
   })
   console.log(`[TokenRefresh] Pinterest refreshed: ${accountId}`)
+}
+
+async function refreshBlueskyToken(accountId: string, refreshJwt: string) {
+  const result = await refreshBlueskySession(refreshJwt)
+
+  await prisma.socialAccount.update({
+    where: { id: accountId },
+    data: {
+      accessToken: encryptSecret(result.accessJwt),
+      refreshToken: encryptSecret(result.refreshJwt),
+      // Bluesky access JWTs typically last ~2 hours; set a reasonable expiry
+      tokenExpiry: new Date(Date.now() + 2 * 60 * 60 * 1000),
+    },
+  })
+  console.log(`[TokenRefresh] Bluesky refreshed: ${accountId}`)
 }

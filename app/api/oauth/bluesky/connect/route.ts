@@ -24,6 +24,9 @@ export async function POST(req: NextRequest) {
     // Save encrypted credentials at rest.
     // accessToken stores the AT Protocol access JWT (used directly as accessJwt at publish time).
     // refreshToken stores the AT Protocol refresh JWT for session renewal.
+    // Bluesky access JWTs last ~2 hours; set expiry so the refresh cron picks it up
+    const tokenExpiry = new Date(Date.now() + 2 * 60 * 60 * 1000)
+
     await prisma.socialAccount.upsert({
       where: {
         userId_platform_externalId: {
@@ -37,6 +40,7 @@ export async function POST(req: NextRequest) {
         handle: profile.handle,
         accessToken: encryptSecret(profile.accessJwt),
         refreshToken: encryptSecret(profile.refreshJwt),
+        tokenExpiry,
         isActive: true,
       },
       create: {
@@ -48,6 +52,7 @@ export async function POST(req: NextRequest) {
         handle: profile.handle,
         accessToken: encryptSecret(profile.accessJwt),
         refreshToken: encryptSecret(profile.refreshJwt),
+        tokenExpiry,
       },
     })
 

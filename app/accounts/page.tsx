@@ -57,10 +57,24 @@ function AccountsContent() {
     if (error) {
       const msgs: Record<string, string> = {
         linkedin_denied: 'LinkedIn connection was cancelled.',
+        linkedin_state_mismatch: 'LinkedIn auth failed — session expired. Please try again.',
         linkedin_pages_permissions_required: 'LinkedIn Page permissions are missing on your app. Request/enable r_organization_admin and w_organization_social in LinkedIn Developer Portal.',
+        linkedin_failed: 'LinkedIn connection failed. Please try again.',
         meta_denied: 'Meta connection was cancelled.',
+        meta_state_mismatch: 'Meta auth failed — session expired. Please try again.',
+        meta_failed: 'Meta connection failed. Please try again.',
         twitter_denied: 'Twitter connection was cancelled.',
         twitter_state_mismatch: 'Twitter auth failed (state mismatch). Please try again.',
+        twitter_no_verifier: 'Twitter auth failed — session expired. Please try again.',
+        twitter_failed: 'Twitter connection failed. Please try again.',
+        pinterest_denied: 'Pinterest connection was cancelled.',
+        pinterest_state_mismatch: 'Pinterest auth failed — session expired. Please try again.',
+        pinterest_failed: 'Pinterest connection failed. Please try again.',
+        tumblr_denied: 'Tumblr connection was cancelled.',
+        tumblr_state_mismatch: 'Tumblr auth failed — session expired. Please try again.',
+        tumblr_init_failed: 'Tumblr connection failed. Please try again later.',
+        tumblr_failed: 'Tumblr connection failed. Please try again.',
+        bluesky_failed: 'Bluesky connection failed. Check your handle and app password.',
       }
       showToast(msgs[error] || `Connection failed: ${error}`, true)
     }

@@ -34,16 +34,16 @@ function TumblrConnectContent() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    const raw = searchParams.get('data')
-    if (!raw) { setError('No data received.'); return }
-    try {
-      const parsed = JSON.parse(atob(raw.replace(/-/g, '+').replace(/_/g, '/')))
-      setData(parsed)
-      // Pre-select primary blog (first one)
-      if (parsed.blogs?.length > 0) setSelected(new Set([parsed.blogs[0].name]))
-    } catch {
-      setError('Failed to parse Tumblr response.')
-    }
+    const key = searchParams.get('key')
+    if (!key) { setError('No data received.'); return }
+    fetch(`/api/oauth/pending?key=${key}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(parsed => {
+        if (!parsed) { setError('Tumblr session expired. Please try again.'); return }
+        setData(parsed)
+        if (parsed.blogs?.length > 0) setSelected(new Set([parsed.blogs[0].name]))
+      })
+      .catch(() => setError('Failed to load Tumblr data.'))
   }, [searchParams])
 
   const toggle = (name: string) => {
@@ -58,15 +58,12 @@ function TumblrConnectContent() {
     if (!data || selected.size === 0) return
     setSaving(true)
     try {
+      const key = searchParams.get('key')
       const selectedBlogs = data.blogs.filter(b => selected.has(b.name))
       const res = await fetch('/api/oauth/tumblr/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          accessToken: data.accessToken,
-          accessTokenSecret: data.accessTokenSecret,
-          selectedBlogs,
-        }),
+        body: JSON.stringify({ key, selectedBlogs }),
       })
       if (!res.ok) throw new Error('Save failed')
       router.push('/accounts?success=tumblr')

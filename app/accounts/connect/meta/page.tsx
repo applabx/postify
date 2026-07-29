@@ -47,15 +47,16 @@ function MetaConnectContent() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    const raw = searchParams.get('data')
-    if (!raw) { setError('No data received.'); return }
-    try {
-      const parsed = JSON.parse(atob(raw.replace(/-/g, '+').replace(/_/g, '/')))
-      setData(parsed)
-      setSelectedPages(new Set(parsed.pages.map((p: FacebookPage) => p.id)))
-    } catch {
-      setError('Failed to parse Meta response.')
-    }
+    const key = searchParams.get('key')
+    if (!key) { setError('No data received.'); return }
+    fetch(`/api/oauth/pending?key=${key}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(parsed => {
+        if (!parsed) { setError('Meta session expired. Please try again.'); return }
+        setData(parsed)
+        setSelectedPages(new Set(parsed.pages.map((p: FacebookPage) => p.id)))
+      })
+      .catch(() => setError('Failed to load Meta data.'))
   }, [searchParams])
 
   const igPages = data?.pages.filter(p => p.instagramAccountId) || []
@@ -69,16 +70,15 @@ function MetaConnectContent() {
     if (!data) return
     setSaving(true)
     try {
+      const key = searchParams.get('key')
       const res = await fetch('/api/oauth/meta/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          accessToken: data.accessToken,
+          key,
           selectedPageIds: [...selectedPages],
           selectedGroupIds: [...selectedGroups],
           connectInstagram,
-          allPages: data.pages,
-          allGroups: data.groups,
         }),
       })
       if (!res.ok) throw new Error('Failed')

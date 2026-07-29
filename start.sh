@@ -98,8 +98,16 @@ fi
 echo "Generating Prisma client..."
 npx prisma generate
 
-echo "Syncing schema..."
-npx prisma db push
+echo "Running pending migrations..."
+npx prisma migrate deploy || {
+  echo "----------------------------------------------"
+  echo "Migration deploy failed."
+  echo "If you previously used 'db push', run once:"
+  echo "  npx prisma migrate resolve --applied 20260729_init"
+  echo "Then re-run this script."
+  echo "----------------------------------------------"
+  exit 1
+}
 
 echo "Starting app on http://localhost:3000"
 exec npm run dev

@@ -35,16 +35,16 @@ function LinkedInConnectContent() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    const raw = searchParams.get('data')
-    if (!raw) { setError('No data received from LinkedIn.'); return }
-    try {
-      const parsed = JSON.parse(atob(raw.replace(/-/g, '+').replace(/_/g, '/')))
-      setData(parsed)
-      // Pre-select all pages by default
-      setSelected(new Set(parsed.pages.map((p: LinkedInPage) => p.id)))
-    } catch {
-      setError('Failed to parse LinkedIn response.')
-    }
+    const key = searchParams.get('key')
+    if (!key) { setError('No data received from LinkedIn.'); return }
+    fetch(`/api/oauth/pending?key=${key}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(parsed => {
+        if (!parsed) { setError('LinkedIn session expired. Please try again.'); return }
+        setData(parsed)
+        setSelected(new Set(parsed.pages.map((p: LinkedInPage) => p.id)))
+      })
+      .catch(() => setError('Failed to load LinkedIn data.'))
   }, [searchParams])
 
   const toggle = (id: string) => {
@@ -59,15 +59,13 @@ function LinkedInConnectContent() {
     if (!data || selected.size === 0) return
     setSaving(true)
     try {
+      const key = searchParams.get('key')
       const res = await fetch('/api/oauth/linkedin/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          accessToken: data.accessToken,
-          tokenExpiry: data.tokenExpiry,
-          profile: data.profile,
+          key,
           selectedPageIds: [...selected],
-          allPages: data.pages,
         }),
       })
       if (!res.ok) throw new Error('Failed to save')

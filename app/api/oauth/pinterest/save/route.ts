@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { encryptSecret } from '@/lib/secrets'
+import { consumeOAuthData } from '@/lib/oauth-temp-store'
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -10,10 +11,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { accessToken, refreshToken, tokenExpiry, board } = await req.json()
+  const body = await req.json() as { key: string; board: { id: string; name: string } }
+  const { key, board } = body
 
-  // Pinterest: one account entry, with the selected board stored as pageId
-  // The account externalId = board.id so user can connect different boards separately
+  const pending = consumeOAuthData<{
+    accessToken: string
+    refreshToken: string
+    expiresIn: number
+    boards: Array<{ id: string; name: string }>
+  }>(key)
+  if (!pending) {
+    return NextResponse.json({ error: 'Session expired. Please reconnect Pinterest.' }, { status: 400 })
+  }
+
+  const { accessToken, refreshToken, expiresIn } = pending
+  const tokenExpiry = expiresIn ? new Date(Date.now() + expiresIn * 1000).toISOString() : null
+
   await prisma.socialAccount.upsert({
     where: {
       userId_platform_externalId: {

@@ -12,6 +12,8 @@ const PUBLIC_PATHS = [
 const PUBLIC_PREFIXES = [
   '/api/auth/',
   '/api/csrf',
+  '/api/oauth/',       // OAuth routes have their own auth + need to work on redirect
+  '/api/cron/',        // Cron routes have their own auth via CRON_SECRET
   '/_next/static',
   '/_next/image',
   '/favicon.ico',
@@ -28,7 +30,7 @@ function isPublicPath(pathname: string): boolean {
   return false
 }
 
-export async function proxy(req: NextRequest) {
+export async function middleware(req: NextRequest) {
   // Explicitly allow public paths — no auth needed
   if (isPublicPath(req.nextUrl.pathname)) {
     return NextResponse.next()
@@ -52,6 +54,6 @@ export async function proxy(req: NextRequest) {
 // Apply to all paths except public ones
 export const config = {
   matcher: [
-    '/((?!login|register|forgot-password|reset-password|api/auth/callback|api/auth/csrf|api/csrf|_next/static|_next/image|favicon.ico|api/health).*)',
+    '/((?!login|register|forgot-password|reset-password|api/auth/|api/csrf|api/oauth/|api/cron/|_next/static|_next/image|favicon.ico|api/health).*)',
   ],
 }

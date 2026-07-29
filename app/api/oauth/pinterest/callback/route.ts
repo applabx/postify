@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { exchangePinterestCode, getPinterestBoards } from '@/lib/oauth/platforms'
 import { prisma } from '@/lib/prisma'
 import { isValidOAuthState, clearOAuthStateCookie } from '@/lib/oauth-state'
+import { storeOAuthData } from '@/lib/oauth-temp-store'
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -29,17 +30,15 @@ export async function GET(req: NextRequest) {
     const boards = await getPinterestBoards(tokens.access_token)
 
     // Pinterest: one account, many boards — save account + pass boards to picker
-    const pendingData = Buffer.from(
-      JSON.stringify({
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token,
-        expiresIn: tokens.expires_in,
-        boards,
-      })
-    ).toString('base64url')
+    const key = storeOAuthData({
+      accessToken: tokens.access_token,
+      refreshToken: tokens.refresh_token,
+      expiresIn: tokens.expires_in,
+      boards,
+    })
 
     const res = NextResponse.redirect(
-      new URL(`/accounts/connect/pinterest?data=${pendingData}`, req.url)
+      new URL(`/accounts/connect/pinterest?key=${key}`, req.url)
     )
     clearOAuthStateCookie(res, 'pinterest')
     return res

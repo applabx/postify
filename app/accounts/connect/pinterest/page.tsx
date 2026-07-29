@@ -35,16 +35,16 @@ function PinterestConnectContent() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    const raw = searchParams.get('data')
-    if (!raw) { setError('No data received.'); return }
-    try {
-      const parsed = JSON.parse(atob(raw.replace(/-/g, '+').replace(/_/g, '/')))
-      setData(parsed)
-      // Default select first board
-      if (parsed.boards?.length > 0) setSelectedBoard(parsed.boards[0].id)
-    } catch {
-      setError('Failed to parse Pinterest response.')
-    }
+    const key = searchParams.get('key')
+    if (!key) { setError('No data received.'); return }
+    fetch(`/api/oauth/pending?key=${key}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(parsed => {
+        if (!parsed) { setError('Pinterest session expired. Please try again.'); return }
+        setData(parsed)
+        if (parsed.boards?.length > 0) setSelectedBoard(parsed.boards[0].id)
+      })
+      .catch(() => setError('Failed to load Pinterest data.'))
   }, [searchParams])
 
   const handleSave = async () => {
@@ -52,19 +52,12 @@ function PinterestConnectContent() {
     setSaving(true)
     try {
       const board = data.boards.find(b => b.id === selectedBoard)!
-      const tokenExpiry = data.expiresIn
-        ? new Date(Date.now() + data.expiresIn * 1000).toISOString()
-        : null
+      const key = searchParams.get('key')
 
       const res = await fetch('/api/oauth/pinterest/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          accessToken: data.accessToken,
-          refreshToken: data.refreshToken,
-          tokenExpiry,
-          board,
-        }),
+        body: JSON.stringify({ key, board }),
       })
       if (!res.ok) throw new Error('Save failed')
       router.push('/accounts?success=pinterest')

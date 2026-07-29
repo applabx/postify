@@ -11,6 +11,8 @@ export function getLinkedInAuthUrl(state: string, appOrigin?: string): string {
     'email',
     'r_organization_admin',
     'w_organization_social',
+    'w_member_social',
+    'offline_access',
   ].join(' ')
   const origin = appOrigin || process.env.NEXT_PUBLIC_APP_URL!
   const redirectUri = `${origin}/api/oauth/linkedin/callback`
@@ -29,14 +31,17 @@ export function getLinkedInAuthUrl(state: string, appOrigin?: string): string {
 // ─── Step 2: Exchange code for tokens ────────────────────────────────────────
 export async function exchangeLinkedInCode(code: string): Promise<{
   accessToken: string
+  refreshToken?: string
   expiresIn: number
 }>;
 export async function exchangeLinkedInCode(code: string, appOrigin: string): Promise<{
   accessToken: string
+  refreshToken?: string
   expiresIn: number
 }>;
 export async function exchangeLinkedInCode(code: string, appOrigin?: string): Promise<{
   accessToken: string
+  refreshToken?: string
   expiresIn: number
 }> {
   const origin = appOrigin || process.env.NEXT_PUBLIC_APP_URL!
@@ -55,6 +60,7 @@ export async function exchangeLinkedInCode(code: string, appOrigin?: string): Pr
 
   return {
     accessToken: res.data.access_token,
+    refreshToken: res.data.refresh_token,
     expiresIn: res.data.expires_in,
   }
 }

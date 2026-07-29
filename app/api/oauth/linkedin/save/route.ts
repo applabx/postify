@@ -3,21 +3,8 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { encryptSecret } from '@/lib/secrets'
-
-async function ensureSessionUser(session: { user: { id: string; email?: string | null; name?: string | null } }) {
-  await prisma.user.upsert({
-    where: { id: session.user.id },
-    update: {
-      email: session.user.email ?? undefined,
-      name: session.user.name ?? undefined,
-    },
-    create: {
-      id: session.user.id,
-      email: session.user.email ?? `${session.user.id}@local.invalid`,
-      name: session.user.name ?? session.user.id,
-    },
-  })
-}
+import { consumeOAuthData } from '@/lib/oauth-temp-store'
+import { ensureSessionUser } from '@/lib/session-user'
 
 type LinkedInPage = {
   id: string
@@ -38,18 +25,29 @@ export async function POST(req: NextRequest) {
   await ensureSessionUser(session as { user: { id: string; email?: string | null; name?: string | null } })
 
   const body = await req.json() as {
-    accessToken: string
-    tokenExpiry: string
+    key: string
     selectedPageIds: string[]
-    allPages: LinkedInPage[]
   }
-  const { accessToken, tokenExpiry, selectedPageIds, allPages } = body
+  const { key, selectedPageIds } = body
+
+  type PendingData = {
+    accessToken: string
+    refreshToken?: string
+    tokenExpiry: string
+    pages: LinkedInPage[]
+  }
+  const pending = consumeOAuthData<PendingData>(key)
+  if (!pending) {
+    return NextResponse.json({ error: 'Session expired. Please reconnect LinkedIn.' }, { status: 400 })
+  }
+
+  const { accessToken, refreshToken, tokenExpiry, pages } = pending
 
   if (!selectedPageIds?.length) {
     return NextResponse.json({ error: 'No pages selected' }, { status: 400 })
   }
 
-  const selectedPages = allPages.filter((p) => selectedPageIds.includes(p.id))
+  const selectedPages = pages.filter((p) => selectedPageIds.includes(p.id))
 
   // Upsert each selected page as a SocialAccount
   const saved = await Promise.all(
@@ -67,6 +65,7 @@ export async function POST(req: NextRequest) {
           handle: page.vanityName,
           avatarUrl: page.logoUrl,
           accessToken: encryptSecret(accessToken),
+          refreshToken: refreshToken ? encryptSecret(refreshToken) : undefined,
           tokenExpiry: new Date(tokenExpiry),
           isActive: true,
         },
@@ -79,6 +78,7 @@ export async function POST(req: NextRequest) {
           handle: page.vanityName,
           avatarUrl: page.logoUrl,
           accessToken: encryptSecret(accessToken),
+          refreshToken: refreshToken ? encryptSecret(refreshToken) : null,
           tokenExpiry: new Date(tokenExpiry),
           pageId: page.urn,
         },

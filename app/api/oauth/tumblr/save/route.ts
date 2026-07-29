@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { encryptSecret } from '@/lib/secrets'
+import { consumeOAuthData } from '@/lib/oauth-temp-store'
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -10,7 +11,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { accessToken, accessTokenSecret, selectedBlogs } = await req.json()
+  const body = await req.json() as { key: string; selectedBlogs: Array<{ name: string; title?: string }> }
+  const { key, selectedBlogs } = body
+
+  const pending = consumeOAuthData<{
+    accessToken: string
+    accessTokenSecret: string
+    blogs: Array<{ name: string; title?: string }>
+  }>(key)
+  if (!pending) {
+    return NextResponse.json({ error: 'Session expired. Please reconnect Tumblr.' }, { status: 400 })
+  }
+
+  const { accessToken, accessTokenSecret } = pending
 
   if (!selectedBlogs?.length) {
     return NextResponse.json({ error: 'No blogs selected' }, { status: 400 })

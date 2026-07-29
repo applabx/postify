@@ -26,9 +26,28 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'No file provided' }, { status: 400 })
   }
 
-  // Validate file type
-  const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'video/mp4', 'video/mov', 'video/quicktime']
-  if (!validTypes.includes(file.type)) {
+  // Validate file type by magic bytes (defense against spoofed Content-Type)
+  const buffer = Buffer.from(await file.arrayBuffer())
+  const magicBytes: Record<string, string[]> = {
+    'image/jpeg': ['ffd8ff'],
+    'image/png': ['89504e47'],
+    'image/gif': ['47494638'],
+    'image/webp': ['52494646'],
+    'video/mp4': ['0000001c66747970', '0000002066747970'],
+    'video/mov': ['00000014667479707174', '0000001c66747970'],
+    'video/quicktime': ['00000014667479707174'],
+  }
+  const header = buffer.subarray(0, 8).toString('hex')
+  const matchedType = Object.entries(magicBytes).find(([_, sigs]) =>
+    sigs.some(sig => header.startsWith(sig))
+  )?.[0]
+  if (!matchedType) {
+    return NextResponse.json({ error: `Unsupported file type` }, { status: 400 })
+  }
+
+  // Also validate client-supplied MIME type if present
+  const validTypes = Object.keys(magicBytes)
+  if (file.type && !validTypes.includes(file.type)) {
     return NextResponse.json({ error: `Unsupported file type: ${file.type}` }, { status: 400 })
   }
 

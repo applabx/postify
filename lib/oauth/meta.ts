@@ -209,13 +209,50 @@ export async function postToInstagram(params: {
   caption: string
   mediaUrl: string
   mediaType?: 'IMAGE' | 'VIDEO' | 'CAROUSEL'
+  mediaUrls?: string[]
 }): Promise<string> {
-  // Step 1: Create media container
-  const containerRes = await axios.post(`${META_GRAPH}/${params.igAccountId}/media`, {
-    image_url: params.mediaUrl,
+  if (params.mediaType === 'CAROUSEL' && params.mediaUrls && params.mediaUrls.length > 1) {
+    // Step 1: Create child media containers
+    const childIds = await Promise.all(
+      params.mediaUrls.map(url =>
+        axios.post(`${META_GRAPH}/${params.igAccountId}/media`, {
+          image_url: url,
+          is_carousel_item: true,
+          access_token: params.pageAccessToken,
+        }).then(r => r.data.id)
+      )
+    )
+
+    // Step 2: Create carousel container
+    const containerRes = await axios.post(`${META_GRAPH}/${params.igAccountId}/media`, {
+      media_type: 'CAROUSEL',
+      children: childIds,
+      caption: params.caption,
+      access_token: params.pageAccessToken,
+    })
+    const containerId = containerRes.data.id
+
+    // Step 3: Publish
+    const publishRes = await axios.post(`${META_GRAPH}/${params.igAccountId}/media_publish`, {
+      creation_id: containerId,
+      access_token: params.pageAccessToken,
+    })
+    return publishRes.data.id
+  }
+
+  // Step 1: Create media container (IMAGE or VIDEO)
+  const mediaBody: Record<string, unknown> = {
     caption: params.caption,
     access_token: params.pageAccessToken,
-  })
+  }
+  if (params.mediaType === 'VIDEO') {
+    mediaBody.media_type = 'VIDEO'
+    mediaBody.video_url = params.mediaUrl
+  } else {
+    mediaBody.image_url = params.mediaUrl
+  }
+
+  const containerRes = await axios.post(`${META_GRAPH}/${params.igAccountId}/media`, mediaBody)
   const containerId = containerRes.data.id
 
   // Step 2: Publish container

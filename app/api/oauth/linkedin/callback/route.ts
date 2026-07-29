@@ -9,21 +9,8 @@ import {
 import { prisma } from '@/lib/prisma'
 import { isValidOAuthState, clearOAuthStateCookie } from '@/lib/oauth-state'
 import { encryptSecret } from '@/lib/secrets'
-
-async function ensureSessionUser(session: { user: { id: string; email?: string | null; name?: string | null } }) {
-  await prisma.user.upsert({
-    where: { id: session.user.id },
-    update: {
-      email: session.user.email ?? undefined,
-      name: session.user.name ?? undefined,
-    },
-    create: {
-      id: session.user.id,
-      email: session.user.email ?? `${session.user.id}@local.invalid`,
-      name: session.user.name ?? session.user.id,
-    },
-  })
-}
+import { storeOAuthData } from '@/lib/oauth-temp-store'
+import { ensureSessionUser } from '@/lib/session-user'
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -50,7 +37,7 @@ export async function GET(req: NextRequest) {
     await ensureSessionUser(session as { user: { id: string; email?: string | null; name?: string | null } })
 
     // 1. Exchange code for access token
-    const { accessToken, expiresIn } = await exchangeLinkedInCode(code, req.nextUrl.origin)
+    const { accessToken, refreshToken, expiresIn } = await exchangeLinkedInCode(code)
 
     // 2. Get user's LinkedIn profile
     const profile = await getLinkedInProfile(accessToken)
@@ -93,6 +80,7 @@ export async function GET(req: NextRequest) {
         },
         update: {
           accessToken: encryptSecret(accessToken),
+          refreshToken: refreshToken ? encryptSecret(refreshToken) : undefined,
           tokenExpiry,
           name: profile.name,
           avatarUrl: profile.picture,
@@ -107,6 +95,7 @@ export async function GET(req: NextRequest) {
           handle: profile.email,
           avatarUrl: profile.picture,
           accessToken: encryptSecret(accessToken),
+          refreshToken: refreshToken ? encryptSecret(refreshToken) : null,
           tokenExpiry,
           isActive: true,
         },
@@ -117,12 +106,10 @@ export async function GET(req: NextRequest) {
     }
 
     // 4b. Pages found — let user pick which ones to connect
-    const pendingData = Buffer.from(
-      JSON.stringify({ accessToken, tokenExpiry, profile, pages })
-    ).toString('base64url')
+    const key = storeOAuthData({ accessToken, refreshToken, tokenExpiry, profile, pages })
 
     const res = NextResponse.redirect(
-      new URL(`/accounts/connect/linkedin?data=${pendingData}`, req.url)
+      new URL(`/accounts/connect/linkedin?key=${key}`, req.url)
     )
     clearOAuthStateCookie(res, 'linkedin')
     return res

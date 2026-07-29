@@ -30,9 +30,9 @@ npm ci --production=false
 echo "🗄️  Generating Prisma client..."
 npx prisma generate
 
-# Run any pending DB migrations
+# Run pending DB migrations (safe — no data loss)
 echo "🗄️  Running DB migrations..."
-npx prisma db push --accept-data-loss
+npx prisma migrate deploy
 
 # Build Next.js
 echo "🔨 Building..."
