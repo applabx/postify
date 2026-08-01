@@ -56,7 +56,7 @@ export async function publishPost(postId: string): Promise<PublishResult> {
 
   await Promise.all(
     results.map(async (result: any, i: number) => {
-      const target = post.targets[i]
+      const target = pendingTargets[i]
       if (result.status === 'fulfilled') {
         successCount++
         await prisma.postTarget.update({

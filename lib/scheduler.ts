@@ -54,10 +54,15 @@ export function getPublishQueue(): Bull.Queue {
 // Recovers posts stuck in PUBLISHING state for more than 30 minutes.
 // Safe to run on every startup: uses deterministic jobIds (post:<postId>),
 // so duplicate jobs are never created.
+//
+// NOTE: invoked explicitly from instrumentation.ts at server startup.
+// Must NOT run as a module-load side effect — the route handlers import this
+// module dynamically, and a fire-and-forget reconciliation there races with
+// the route's own scheduledJob.create() (causing P2002 / HTTP 500).
 
 const STUCK_PUBLISH_TIMEOUT_MS = 30 * 60 * 1000
 
-async function reconcileScheduledJobs(): Promise<void> {
+export async function reconcileScheduledJobs(): Promise<void> {
   const queue = getPublishQueue()
   const now = new Date()
 
@@ -165,12 +170,9 @@ async function reconcileScheduledJobs(): Promise<void> {
   }
 }
 
-// Eagerly initialize the queue so the processor is registered on server start
-// (guarded: don't run during build, only at runtime)
-if (typeof window === 'undefined' && process.env.NEXT_PHASE !== 'phase-production-build') {
-  getPublishQueue()
-  reconcileScheduledJobs()
-}
+// NOTE: queue initialization and reconciliation are invoked explicitly from
+// instrumentation.ts at server startup. Do NOT re-add a module-load side
+// effect here — it races with the dynamic import in the route handlers.
 
 // ─── Schedule a post ─────────────────────────────────────────────────────────
 export async function schedulePost(postId: string, runAt: Date): Promise<string> {
