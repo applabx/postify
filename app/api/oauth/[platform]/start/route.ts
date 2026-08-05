@@ -6,6 +6,7 @@ import { getMetaAuthUrl } from '@/lib/oauth/meta'
 import { getTwitterAuthUrl, getPinterestAuthUrl } from '@/lib/oauth/platforms'
 import { randomBytes, createHash, createHmac } from 'crypto'
 import { setOAuthStateCookie } from '@/lib/oauth-state'
+import { redirectTo } from '@/lib/redirect-url'
 
 // GET /api/oauth/[platform]/start
 // Redirects the user to the correct OAuth consent screen
@@ -15,7 +16,7 @@ export async function GET(
 ) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) {
-    return NextResponse.redirect(new URL('/login', req.url))
+    return NextResponse.redirect(redirectTo('/login'))
   }
 
   const { platform } = await params
@@ -67,7 +68,7 @@ export async function GET(
 
     case 'bluesky': {
       // Bluesky uses app passwords, not OAuth — redirect to form page
-      return NextResponse.redirect(new URL('/accounts/connect/bluesky', req.url))
+      return NextResponse.redirect(redirectTo('/accounts/connect/bluesky'))
     }
 
     default:

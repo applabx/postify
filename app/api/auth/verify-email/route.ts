@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { redirectTo } from '@/lib/redirect-url'
 
 export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get('token')
-  const loginRedirect = new URL('/login?verified=1', req.url)
-  const errorRedirect = new URL('/login?error=verification_failed', req.url)
+  const loginRedirect = redirectTo('/login?verified=1')
+  const errorRedirect = redirectTo('/login?error=verification_failed')
 
   if (!token) return NextResponse.redirect(errorRedirect)
 

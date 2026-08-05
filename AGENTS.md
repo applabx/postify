@@ -206,6 +206,28 @@ For local/dev testing without Google OAuth: set `ENABLE_DEV_AUTH=true` + `AUTH_U
 
 ## Current Operational Notes
 
+### ⚠️ LinkedIn OAuth — two hard constraints (production incident 2026-08-05)
+1. **Scopes**: The LinkedIn auth URL must ONLY request scopes provisioned on
+   the production app: `openid profile email r_organization_admin
+   w_organization_social`. `w_member_social` and `offline_access` are NOT
+   provisioned; requesting them makes LinkedIn reject the ENTIRE
+   authorization request (generic "Bummer, something went wrong" +
+   `error=access_denied`). Re-add them ONLY after the app is approved for
+   the Share on LinkedIn product. Consequence: refresh tokens
+   (`offline_access`) are not obtainable, so LinkedIn tokens are not
+   auto-refreshed; users reconnect after the 60-day expiry. Guarded by
+   `tests/oauth-redirects.test.ts`.
+2. **Redirect URLs**: NEVER use `req.url` as a redirect base. The image runs
+   with `HOSTNAME=0.0.0.0 PORT=3000`, and the Next.js standalone server
+   builds `req.url` from those env vars (ignoring the Host header), so
+   `new URL(path, req.url)` yields `http://0.0.0.0:3000/...` which browsers
+   refuse to follow (ERR_CONNECTION_REFUSED). ALWAYS use
+   `redirectTo()` from `lib/redirect-url.ts` (NEXT_PUBLIC_APP_URL based).
+   Note: `NEXT_PUBLIC_APP_URL` is inlined at build time only when set
+   during build; GHCR builds don't set it, so the runtime Coolify value is
+   used. `lib/env.ts` requires NEXT_PUBLIC_APP_URL at startup.
+
+
 - Production auth LIVE: `ENABLE_DEV_AUTH=false`, `NEXT_PUBLIC_ENABLE_DEV_AUTH=false` — real Google OAuth, dev bypass blocked.
 - DB connected to Coolify managed PostgreSQL (`mokffvpqs75w6cg3ixyxxzuq`), 3 users confirmed.
 - GHCR workflow active: every master push builds `ghcr.io/applabx/postify:{sha}` + `latest`.

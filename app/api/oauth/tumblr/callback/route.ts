@@ -6,11 +6,12 @@ import axios from 'axios'
 import { createHmac, randomBytes } from 'crypto'
 import { isValidOAuthState, clearOAuthStateCookie } from '@/lib/oauth-state'
 import { storeOAuthData } from '@/lib/oauth-temp-store'
+import { redirectTo } from '@/lib/redirect-url'
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) {
-    return NextResponse.redirect(new URL('/login', req.url))
+    return NextResponse.redirect(redirectTo('/login'))
   }
 
   const { searchParams } = new URL(req.url)
@@ -20,11 +21,11 @@ export async function GET(req: NextRequest) {
   const denied = searchParams.get('denied')
 
   if (!isValidOAuthState(req, 'tumblr', state)) {
-    return NextResponse.redirect(new URL('/accounts?error=tumblr_state_mismatch', req.url))
+    return NextResponse.redirect(redirectTo('/accounts?error=tumblr_state_mismatch'))
   }
 
   if (denied || !oauthToken || !oauthVerifier) {
-    return NextResponse.redirect(new URL('/accounts?error=tumblr_denied', req.url))
+    return NextResponse.redirect(redirectTo('/accounts?error=tumblr_denied'))
   }
 
   try {
@@ -42,13 +43,13 @@ export async function GET(req: NextRequest) {
     })
 
     const res = NextResponse.redirect(
-      new URL(`/accounts/connect/tumblr?key=${key}`, req.url)
+      redirectTo(`/accounts/connect/tumblr?key=${key}`)
     )
     clearOAuthStateCookie(res, 'tumblr')
     return res
   } catch (err: any) {
     console.error('Tumblr OAuth error:', err.message)
-    return NextResponse.redirect(new URL('/accounts?error=tumblr_failed', req.url))
+    return NextResponse.redirect(redirectTo('/accounts?error=tumblr_failed'))
   }
 }
 

@@ -5,11 +5,12 @@ import { exchangeTwitterCode, getTwitterProfile } from '@/lib/oauth/platforms'
 import { prisma } from '@/lib/prisma'
 import { isValidOAuthState, clearOAuthStateCookie } from '@/lib/oauth-state'
 import { encryptSecret } from '@/lib/secrets'
+import { redirectTo } from '@/lib/redirect-url'
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) {
-    return NextResponse.redirect(new URL('/login', req.url))
+    return NextResponse.redirect(redirectTo('/login'))
   }
 
   const { searchParams } = new URL(req.url)
@@ -19,16 +20,16 @@ export async function GET(req: NextRequest) {
 
   // Verify state to prevent CSRF
   if (!isValidOAuthState(req, 'twitter', state)) {
-    return NextResponse.redirect(new URL('/accounts?error=twitter_state_mismatch', req.url))
+    return NextResponse.redirect(redirectTo('/accounts?error=twitter_state_mismatch'))
   }
 
   if (error || !code) {
-    return NextResponse.redirect(new URL('/accounts?error=twitter_denied', req.url))
+    return NextResponse.redirect(redirectTo('/accounts?error=twitter_denied'))
   }
 
   const codeVerifier = req.cookies.get('twitter_code_verifier')?.value
   if (!codeVerifier) {
-    return NextResponse.redirect(new URL('/accounts?error=twitter_no_verifier', req.url))
+    return NextResponse.redirect(redirectTo('/accounts?error=twitter_no_verifier'))
   }
 
   try {
@@ -73,12 +74,12 @@ export async function GET(req: NextRequest) {
     })
 
     // Clear PKCE cookies
-    const res = NextResponse.redirect(new URL('/accounts?success=twitter', req.url))
+    const res = NextResponse.redirect(redirectTo('/accounts?success=twitter'))
     clearOAuthStateCookie(res, 'twitter')
     res.cookies.delete('twitter_code_verifier')
     return res
   } catch (err: any) {
     console.error('Twitter OAuth error:', err.response?.data || err.message)
-    return NextResponse.redirect(new URL('/accounts?error=twitter_failed', req.url))
+    return NextResponse.redirect(redirectTo('/accounts?error=twitter_failed'))
   }
 }

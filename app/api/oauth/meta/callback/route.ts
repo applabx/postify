@@ -11,11 +11,12 @@ import { isValidOAuthState, clearOAuthStateCookie } from '@/lib/oauth-state'
 import { prisma } from '@/lib/prisma'
 import { storeOAuthData } from '@/lib/oauth-temp-store'
 import { ensureSessionUser } from '@/lib/session-user'
+import { redirectTo } from '@/lib/redirect-url'
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) {
-    return NextResponse.redirect(new URL('/login', req.url))
+    return NextResponse.redirect(redirectTo('/login'))
   }
 
   const { searchParams } = new URL(req.url)
@@ -24,11 +25,11 @@ export async function GET(req: NextRequest) {
   const error = searchParams.get('error')
 
   if (!isValidOAuthState(req, 'meta', state)) {
-    return NextResponse.redirect(new URL('/accounts?error=meta_state_mismatch', req.url))
+    return NextResponse.redirect(redirectTo('/accounts?error=meta_state_mismatch'))
   }
 
   if (error || !code) {
-    return NextResponse.redirect(new URL(`/accounts?error=meta_denied`, req.url))
+    return NextResponse.redirect(redirectTo('/accounts?error=meta_denied'))
   }
 
   try {
@@ -50,13 +51,13 @@ export async function GET(req: NextRequest) {
     const key = storeOAuthData({ accessToken: longToken, pages, groups })
 
     const res = NextResponse.redirect(
-      new URL(`/accounts/connect/meta?key=${key}`, req.url)
+      redirectTo(`/accounts/connect/meta?key=${key}`)
     )
     clearOAuthStateCookie(res, 'meta')
     return res
   } catch (err: unknown) {
     const error = err as { response?: { data?: unknown }; message?: string }
     console.error('Meta OAuth error:', error.response?.data || error.message)
-    return NextResponse.redirect(new URL(`/accounts?error=meta_failed`, req.url))
+    return NextResponse.redirect(redirectTo('/accounts?error=meta_failed'))
   }
 }

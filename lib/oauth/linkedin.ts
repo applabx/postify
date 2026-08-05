@@ -5,14 +5,19 @@ const LINKEDIN_AUTH = 'https://www.linkedin.com/oauth/v2'
 
 // ─── Step 1: Generate the OAuth URL the user clicks ─────────────────────────
 export function getLinkedInAuthUrl(state: string, appOrigin?: string): string {
+  // NOTE: scope set intentionally matches the production LinkedIn app's
+  // provisioned permissions. `w_member_social` and `offline_access` were
+  // previously added here but are NOT provisioned on the app; LinkedIn
+  // rejects the entire authorization request when an unprovisioned scope
+  // is requested (generic "Bummer, something went wrong" + error=access_denied).
+  // Re-add them ONLY after the app is approved for the Share on LinkedIn
+  // product and the scopes appear in the Developer Portal.
   const scopes = [
     'openid',
     'profile',
     'email',
     'r_organization_admin',
     'w_organization_social',
-    'w_member_social',
-    'offline_access',
   ].join(' ')
   const origin = appOrigin || process.env.NEXT_PUBLIC_APP_URL!
   const redirectUri = `${origin}/api/oauth/linkedin/callback`

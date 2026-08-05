@@ -10,6 +10,9 @@ const REQUIRED_FOR_ALL = [
   'NEXTAUTH_SECRET',
   'TOKEN_ENCRYPTION_KEY',
   'CRON_SECRET',
+  // Used as the base for every OAuth redirect URL. If missing or wrong
+  // (e.g. an internal 0.0.0.0 value), browsers cannot follow the redirects.
+  'NEXT_PUBLIC_APP_URL',
 ]
 
 const PLATFORM_REQUIRED: Record<string, string[]> = {

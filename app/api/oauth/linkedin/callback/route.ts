@@ -11,11 +11,12 @@ import { isValidOAuthState, clearOAuthStateCookie } from '@/lib/oauth-state'
 import { encryptSecret } from '@/lib/secrets'
 import { storeOAuthData } from '@/lib/oauth-temp-store'
 import { ensureSessionUser } from '@/lib/session-user'
+import { redirectTo } from '@/lib/redirect-url'
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) {
-    return NextResponse.redirect(new URL('/login', req.url))
+    return NextResponse.redirect(redirectTo('/login'))
   }
 
   const { searchParams } = new URL(req.url)
@@ -24,12 +25,12 @@ export async function GET(req: NextRequest) {
   const error = searchParams.get('error')
 
   if (!isValidOAuthState(req, 'linkedin', state)) {
-    return NextResponse.redirect(new URL('/accounts?error=linkedin_state_mismatch', req.url))
+    return NextResponse.redirect(redirectTo('/accounts?error=linkedin_state_mismatch'))
   }
 
   if (error || !code) {
     return NextResponse.redirect(
-      new URL(`/accounts?error=linkedin_denied`, req.url)
+      redirectTo('/accounts?error=linkedin_denied')
     )
   }
 
@@ -63,7 +64,7 @@ export async function GET(req: NextRequest) {
       // If org scope is denied, fail clearly for page-only mode.
       if (orgAccessDenied) {
         const res = NextResponse.redirect(
-          new URL('/accounts?error=linkedin_pages_permissions_required', req.url)
+          redirectTo('/accounts?error=linkedin_pages_permissions_required')
         )
         clearOAuthStateCookie(res, 'linkedin')
         return res
@@ -100,7 +101,7 @@ export async function GET(req: NextRequest) {
           isActive: true,
         },
       })
-      const res = NextResponse.redirect(new URL('/accounts?success=linkedin', req.url))
+      const res = NextResponse.redirect(redirectTo('/accounts?success=linkedin'))
       clearOAuthStateCookie(res, 'linkedin')
       return res
     }
@@ -109,7 +110,7 @@ export async function GET(req: NextRequest) {
     const key = storeOAuthData({ accessToken, refreshToken, tokenExpiry, profile, pages })
 
     const res = NextResponse.redirect(
-      new URL(`/accounts/connect/linkedin?key=${key}`, req.url)
+      redirectTo(`/accounts/connect/linkedin?key=${key}`)
     )
     clearOAuthStateCookie(res, 'linkedin')
     return res
@@ -117,7 +118,7 @@ export async function GET(req: NextRequest) {
     const error = err as { response?: { data?: unknown }; message?: string }
     console.error('LinkedIn OAuth error:', error.response?.data || error.message)
     return NextResponse.redirect(
-      new URL(`/accounts?error=linkedin_failed`, req.url)
+      redirectTo('/accounts?error=linkedin_failed')
     )
   }
 }
