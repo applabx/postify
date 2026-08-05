@@ -133,20 +133,27 @@ export async function reconcileScheduledJobs(): Promise<void> {
       },
       include: {
         targets: {
-          where: { status: 'PENDING' },
+          where: { status: { in: ['PENDING', 'PUBLISHING'] } },
         },
       },
     })
 
     for (const post of stuckPosts) {
       try {
-        // Mark stuck PENDING targets as FAILED
+        // Mark stuck PENDING/PUBLISHING targets as FAILED. PUBLISHING targets
+        // mean the platform call may already have succeeded (crash between
+        // claim and finalize) — never auto-republish them; require manual
+        // verification. PENDING targets never started, so they are simply
+        // failed.
         for (const target of post.targets) {
+          const interrupted = target.status === 'PUBLISHING'
           await prisma.postTarget.update({
             where: { id: target.id },
             data: {
               status: 'FAILED',
-              errorMessage: 'Publish timed out — container may have restarted',
+              errorMessage: interrupted
+                ? 'Publish interrupted — the platform may have received this post. Verify manually before retrying.'
+                : 'Publish timed out — container may have restarted',
             },
           })
         }

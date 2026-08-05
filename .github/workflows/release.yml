@@ -57,6 +57,14 @@ jobs:
           build-args: |
             NODE_VERSION=20.11.1
 
+      - name: Scan image for vulnerabilities (Trivy)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ghcr.io/applabx/postify:latest
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+          ignore-unfixed: true
+
   # ── Optional: trigger Coolify deploy via API ──────────────────────────────
   # Un-comment and fill in your Coolify API key secret when ready.
   # Requires: Coolify GitHub App webhook reconnected (see PHASE-4-OPERATION.md)

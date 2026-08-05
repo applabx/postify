@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { createHash } from 'crypto'
-import { rateLimit, rateLimitKey, RATE_LIMITS } from '@/lib/rate-limit'
+import { rateLimitAsync, rateLimitKey, RATE_LIMITS } from '@/lib/rate-limit'
 
 // POST /api/upload
 // Client sends file as FormData, server signs and proxies to Cloudinary
@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Rate limit: 20 uploads per minute
-  const rl = rateLimit(rateLimitKey(session.user.id, 'upload'), RATE_LIMITS.upload)
+  const rl = await rateLimitAsync(rateLimitKey(session.user.id, 'upload'), RATE_LIMITS.upload)
   if (!rl.allowed) {
     return NextResponse.json({ error: 'Upload limit reached. Please wait.' }, { status: 429 })
   }
@@ -98,7 +98,7 @@ export async function POST(req: NextRequest) {
   try {
     const uploadRes = await fetch(
       `https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`,
-      { method: 'POST', body: cloudinaryForm }
+      { method: 'POST', body: cloudinaryForm, signal: AbortSignal.timeout(120_000) }
     )
 
     if (!uploadRes.ok) {

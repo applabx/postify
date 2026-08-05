@@ -4,8 +4,8 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { publishPost } from '@/lib/publisher'
 import { z } from 'zod'
-import { rateLimit, rateLimitKey, RATE_LIMITS } from '@/lib/rate-limit'
-import { validateMediaUrls } from '@/lib/media-url'
+import { rateLimitAsync, rateLimitKey, RATE_LIMITS } from '@/lib/rate-limit'
+import { validateMediaUrls, validateMediaUrlsDns } from '@/lib/media-url'
 
 const POST_STATUSES = ['DRAFT', 'SCHEDULED', 'PUBLISHING', 'PUBLISHED', 'PARTIAL', 'FAILED'] as const
 
@@ -34,8 +34,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // Rate limit: 10 publishes per minute
-  const rl = rateLimit(rateLimitKey(session.user.id, 'publish'), RATE_LIMITS.publish)
+  // Rate limit: 10 publishes per minute (Redis-backed, cluster-safe)
+  const rl = await rateLimitAsync(rateLimitKey(session.user.id, 'publish'), RATE_LIMITS.publish)
   if (!rl.allowed) {
     return NextResponse.json(
       { error: 'Too many requests. Please wait before publishing again.' },
@@ -57,10 +57,17 @@ export async function POST(req: NextRequest) {
   const { text, mediaUrls, targetAccountIds, scheduledAt } = parsed.data
 
   // SSRF guard: media URLs are fetched server-side at publish time
-  // (Bluesky), so only public HTTPS URLs may be accepted.
+  // (Bluesky), so only public HTTPS URLs may be accepted. Layer 1: syntax.
   const mediaErr = validateMediaUrls(mediaUrls)
   if (mediaErr) {
     return NextResponse.json({ error: `Invalid media URL: ${mediaErr[0]} (${mediaErr[1]})` }, { status: 400 })
+  }
+  // Layer 2: DNS resolution must not land on private/reserved ranges.
+  if (mediaUrls.length > 0) {
+    const mediaDnsErr = await validateMediaUrlsDns(mediaUrls)
+    if (mediaDnsErr) {
+      return NextResponse.json({ error: `Invalid media URL: ${mediaDnsErr[0]} (${mediaDnsErr[1]})` }, { status: 400 })
+    }
   }
 
   // Validate schedule is in the future

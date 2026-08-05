@@ -29,6 +29,9 @@ export async function sendEmail({ to, subject, html }: SendEmailOptions): Promis
     port: Number(SMTP_PORT),
     secure: Number(SMTP_PORT) === 465,
     auth: { user: SMTP_USER, pass: SMTP_PASS },
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 30_000,
   })
 
   await transporter.sendMail({ from: SMTP_FROM, to, subject, html })

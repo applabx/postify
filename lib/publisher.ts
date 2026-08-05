@@ -8,6 +8,7 @@ import {
   postToThreads,
 } from '@/lib/oauth/meta'
 import { postTweet, postToBluesky, postToPinterest, postToTumblr, uploadBlueskyBlob } from "@/lib/oauth/platforms"
+import { validateMediaUrlDns } from "@/lib/media-url"
 
 type SocialAccount = {
   id: string; platform: string; accountType: string; externalId: string
@@ -39,37 +40,43 @@ export async function publishPost(postId: string): Promise<PublishResult> {
     data: { status: 'PUBLISHING' },
   })
 
-  // Skip targets already marked SUCCESS (prevents duplicate publish on Bull retry)
-  const pendingTargets = post.targets.filter((t: any) => t.status !== 'SUCCESS')
+  // ─── Publish state machine ──────────────────────────────────────────────
+  // Exactly-once-as-possible:
+  //  1. Claim: atomically transition PENDING -> PUBLISHING. If the claim
+  //     fails (row no longer PENDING), another worker already owns it or it
+  //     was finalized — skip it. This makes concurrent/duplicate job
+  //     processing safe at the database level.
+  //  2. Publish: call the platform.
+  //  3. Finalize: SUCCESS or FAILED.
+  //  4. Recovery: targets left in PUBLISHING (crash between claim and
+  //     finalize) are marked FAILED by startup reconciliation with an
+  //     explicit "verify manually" message — never auto-republished, which
+  //     is what would create duplicates when the platform accepted the post
+  //     but the response was lost.
+  const pendingTargets = post.targets.filter((t: any) => t.status === 'PENDING')
   if (pendingTargets.length === 0) {
     return { postId, successCount: post.targets.filter((t: any) => t.status === 'SUCCESS').length, failCount: 0, totalTargets: post.targets.length }
   }
 
-  // Publish to each pending target in parallel (with individual error handling)
   const results = await Promise.allSettled(
-    pendingTargets.map((target: any) => publishToTarget(post.text, post.mediaUrls, post.mediaTypes, target))
-  )
-
-  // Tally results
-  let successCount = 0
-  let failCount = 0
-
-  await Promise.all(
-    results.map(async (result: any, i: number) => {
-      const target = pendingTargets[i]
-      if (result.status === 'fulfilled') {
-        successCount++
+    pendingTargets.map(async (target: any) => {
+      const claim = await prisma.postTarget.updateMany({
+        where: { id: target.id, status: 'PENDING' },
+        data: { status: 'PUBLISHING' },
+      })
+      if (claim.count === 0) {
+        // Lost the claim (concurrent worker or prior finalization) — skip.
+        return { skipped: true, targetId: target.id }
+      }
+      try {
+        const externalId = await publishToTarget(post.text, post.mediaUrls, post.mediaTypes, target)
         await prisma.postTarget.update({
           where: { id: target.id },
-          data: {
-            status: 'SUCCESS',
-            externalPostId: result.value,
-            publishedAt: new Date(),
-          },
+          data: { status: 'SUCCESS', externalPostId: externalId, publishedAt: new Date() },
         })
-      } else {
-        failCount++
-        const reason = result.reason as { message?: string; response?: { status?: number } } | undefined
+        return { ok: true, targetId: target.id }
+      } catch (err: unknown) {
+        const reason = err as { message?: string; response?: { status?: number } }
         console.error(
           `Failed to post to ${target.socialAccount.platform}: ` +
           `${reason?.message ?? 'Unknown error'}` +
@@ -77,14 +84,25 @@ export async function publishPost(postId: string): Promise<PublishResult> {
         )
         await prisma.postTarget.update({
           where: { id: target.id },
-          data: {
-            status: 'FAILED',
-            errorMessage: result.reason?.message || 'Unknown error',
-          },
+          data: { status: 'FAILED', errorMessage: reason?.message || 'Unknown error' },
         })
+        return { ok: false, targetId: target.id, error: err as Error }
       }
     })
   )
+
+  // Tally results
+  let successCount = 0
+  let failCount = 0
+  for (const r of results) {
+    if (r.status === 'rejected') {
+      failCount++
+      continue
+    }
+    if (r.value.skipped) continue
+    if (r.value.ok) successCount++
+    else failCount++
+  }
 
   // Set overall post status
   const finalStatus =
@@ -169,7 +187,15 @@ async function publishToTarget(
       if (mediaUrls.length > 0) {
         imageBlobs = await Promise.all(
           mediaUrls.map(async (url) => {
-            const imageRes = await fetch(url)
+            // SSRF defense in depth: re-validate DNS at publish time in case
+            // the hostname changed since the post was created (rebinding).
+            const dnsErr = await validateMediaUrlDns(url)
+            if (dnsErr) throw new Error(`Media URL rejected at publish time: ${dnsErr}`)
+            // Reliability: hard timeout + abort support on the download.
+            const imageRes = await fetch(url, { signal: AbortSignal.timeout(30_000) })
+            if (!imageRes.ok) {
+              throw new Error(`Failed to download media for Bluesky: HTTP ${imageRes.status}`)
+            }
             const buffer = Buffer.from(await imageRes.arrayBuffer())
             const mimeType = imageRes.headers.get('content-type') || 'image/jpeg'
             const blob = await uploadBlueskyBlob({

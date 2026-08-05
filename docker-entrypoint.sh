@@ -1,6 +1,8 @@
 #!/bin/sh
 set -e
 
+export POSTIFY_STARTED_AT=$(date +%s%3N)
+
 echo "[Postify] Running database migrations..."
 # Direct invocation of the Prisma CLI shipped in the image. Avoids npx/npm
 # entirely: no registry download, no $HOME/.npm cache requirement, no

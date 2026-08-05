@@ -70,7 +70,7 @@ export function validateEnv(platforms: (keyof typeof PLATFORM_REQUIRED)[] = []) 
 }
 
 // Check core env vars at module load time (runs once on server start)
-if (typeof window === 'undefined') {
+if (typeof window === 'undefined' && process.env.NEXT_PHASE !== 'phase-production-build') {
   try {
     validateEnv()
   } catch (err: any) {

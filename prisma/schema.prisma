@@ -141,6 +141,7 @@ model PostTarget {
 
 enum TargetStatus {
   PENDING
+  PUBLISHING
   SUCCESS
   FAILED
   SKIPPED
