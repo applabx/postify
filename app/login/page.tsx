@@ -152,6 +152,12 @@ function LoginContent() {
           Create account
         </Link>
       </p>
+
+      <p style={{ fontSize: 12, color: '#aaaabc', textAlign: 'center', marginTop: 20, marginBottom: 0 }}>
+        <Link href="/privacy" style={{ color: '#888899', textDecoration: 'none' }}>
+          Privacy Policy
+        </Link>
+      </p>
     </LoginShell>
   )
 }

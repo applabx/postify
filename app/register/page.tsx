@@ -170,6 +170,12 @@ function RegisterContent() {
         Already have an account?{' '}
         <a href="/login" style={{ color: '#7c6eff', textDecoration: 'none', fontWeight: 500 }}>Sign in</a>
       </p>
+
+      <p style={{ fontSize: 12, color: '#aaaabc', textAlign: 'center', marginTop: 20, marginBottom: 0 }}>
+        <a href="/privacy" style={{ color: '#888899', textDecoration: 'none' }}>
+          Privacy Policy
+        </a>
+      </p>
     </AuthShell>
   )
 }

@@ -53,6 +53,18 @@ export default function SidebarNav() {
 
       {/* User info + sign out */}
       <div style={{ borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: 12, marginTop: 4 }}>
+        <Link
+          href="/privacy"
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '8px 10px', borderRadius: 7,
+            color: '#9999aa', fontSize: 12,
+            textDecoration: 'none',
+          }}
+        >
+          <span style={{ fontSize: 13, opacity: 0.7 }}>🔒</span>
+          Privacy Policy
+        </Link>
         {session?.user && (
           <div style={{ padding: '4px 10px 10px', marginBottom: 4 }}>
             <div style={{ fontSize: 12, fontWeight: 500, color: '#1a1a2e', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

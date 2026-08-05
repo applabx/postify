@@ -7,6 +7,7 @@ const PUBLIC_PATHS = [
   '/register',
   '/forgot-password',
   '/reset-password',
+  '/privacy',
 ]
 
 const PUBLIC_PREFIXES = [
@@ -54,6 +55,6 @@ export async function middleware(req: NextRequest) {
 // Apply to all paths except public ones
 export const config = {
   matcher: [
-    '/((?!login|register|forgot-password|reset-password|api/auth/|api/csrf|api/oauth/|api/cron/|_next/static|_next/image|favicon.ico|api/health).*)',
+    '/((?!login|register|forgot-password|reset-password|privacy|api/auth/|api/csrf|api/oauth/|api/cron/|_next/static|_next/image|favicon.ico|api/health).*)',
   ],
 }
