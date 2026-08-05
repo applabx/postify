@@ -5,19 +5,23 @@ const LINKEDIN_AUTH = 'https://www.linkedin.com/oauth/v2'
 
 // ─── Step 1: Generate the OAuth URL the user clicks ─────────────────────────
 export function getLinkedInAuthUrl(state: string, appOrigin?: string): string {
-  // NOTE: scope set intentionally matches the production LinkedIn app's
-  // provisioned permissions. `w_member_social` and `offline_access` were
-  // previously added here but are NOT provisioned on the app; LinkedIn
-  // rejects the entire authorization request when an unprovisioned scope
-  // is requested (generic "Bummer, something went wrong" + error=access_denied).
-  // Re-add them ONLY after the app is approved for the Share on LinkedIn
-  // product and the scopes appear in the Developer Portal.
+  // NOTE: scope set verified against LinkedIn itself (2026-08-05, direct
+  // authorization-endpoint probes with client_id 86q9m9ka37vvqo):
+  //   openid profile email                      -> LinkedIn "Authorize" page (OK)
+  //   + r_organization_admin                    -> unauthorized_scope_error
+  //   + w_organization_social                   -> unauthorized_scope_error
+  //   + offline_access                          -> invalid_scope_error
+  // The production LinkedIn app is authorized ONLY for the OIDC product.
+  // Requesting any other scope makes LinkedIn reject the ENTIRE request
+  // ("Bummer, something went wrong" + error=unauthorized_scope_error /
+  // invalid_scope_error). Org scopes (r_organization_admin,
+  // w_organization_social) require LinkedIn app review approval; re-add
+  // them ONLY after they are granted in the Developer Portal and this
+  // probe returns the Authorize page without an error.
   const scopes = [
     'openid',
     'profile',
     'email',
-    'r_organization_admin',
-    'w_organization_social',
   ].join(' ')
   const origin = appOrigin || process.env.NEXT_PUBLIC_APP_URL!
   const redirectUri = `${origin}/api/oauth/linkedin/callback`

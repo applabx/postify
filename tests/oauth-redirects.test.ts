@@ -43,7 +43,7 @@ test('redirectTo() falls back for local dev when env is unset', async () => {
 // Guard: the auth URL must never contain those scopes until they are
 // provisioned and deliberately re-enabled.
 
-test('LinkedIn auth URL uses only provisioned scopes', async () => {
+test('LinkedIn auth URL uses only LinkedIn-authorized scopes', async () => {
   const { getLinkedInAuthUrl } = await import('../lib/oauth/linkedin')
   process.env.NEXT_PUBLIC_APP_URL = 'https://postify.applabx.com'
   process.env.LINKEDIN_CLIENT_ID = 'test-client-id'
@@ -51,14 +51,18 @@ test('LinkedIn auth URL uses only provisioned scopes', async () => {
   const url = getLinkedInAuthUrl('test-state')
   const decoded = decodeURIComponent(url)
 
-  // Required: OIDC + org scopes that production is provisioned for
-  for (const scope of ['openid', 'profile', 'email', 'r_organization_admin', 'w_organization_social']) {
+  // Authorized on the production app (verified against LinkedIn directly:
+  // any scope outside this set makes LinkedIn reject with
+  // unauthorized_scope_error / invalid_scope_error)
+  for (const scope of ['openid', 'profile', 'email']) {
     assert.ok(decoded.includes(scope), `missing scope ${scope} in ${decoded}`)
   }
 
-  // Forbidden until approved: these break authorization
-  assert.ok(!decoded.includes('w_member_social'), 'w_member_social must not be requested (not provisioned)')
-  assert.ok(!decoded.includes('offline_access'), 'offline_access must not be requested (not provisioned)')
+  // Forbidden — not authorized on the LinkedIn app (would reject the
+  // entire authorization request)
+  for (const scope of ['r_organization_admin', 'w_organization_social', 'w_member_social', 'offline_access']) {
+    assert.ok(!decoded.includes(scope), `${scope} must not be requested (not authorized)`)
+  }
 
   // Redirect URI must use the public URL
   assert.ok(url.includes(encodeURIComponent('https://postify.applabx.com/api/oauth/linkedin/callback')),
