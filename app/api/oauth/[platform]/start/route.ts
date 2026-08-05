@@ -32,6 +32,13 @@ export async function GET(
   switch (platform) {
     case 'linkedin': {
       const url = getLinkedInAuthUrl(state, process.env.NEXT_PUBLIC_APP_URL)
+      // Permanent diagnostic: identify the exact builder + scope list in use
+      // (lib/oauth/linkedin.ts getLinkedInAuthUrl) so the runtime request can
+      // be verified against the LinkedIn Developer Console without guessing.
+      console.log(
+        `[OAUTH_START] function=getLinkedInAuthUrl file=lib/oauth/linkedin.ts ` +
+        `scopes=${new URL(url).searchParams.get('scope')} redirect_uri=${new URL(url).searchParams.get('redirect_uri')}`
+      )
       return response(url, platform)
     }
 

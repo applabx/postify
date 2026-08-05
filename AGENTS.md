@@ -207,21 +207,24 @@ For local/dev testing without Google OAuth: set `ENABLE_DEV_AUTH=true` + `AUTH_U
 ## Current Operational Notes
 
 ### ⚠️ LinkedIn OAuth — two hard constraints (production incident 2026-08-05)
-1. **Scopes**: The LinkedIn auth URL must ONLY request `openid profile email`.
-   Verified against LinkedIn directly (authorization-endpoint probes with
-   client_id `86q9m9ka37vvqo`): `openid profile email` returns the
-   "Authorize" page; adding `r_organization_admin` or `w_organization_social`
-   returns `unauthorized_scope_error` ("Scope ... is not authorized for your
-   application"); adding `offline_access` returns `invalid_scope_error`.
-   The production LinkedIn app is authorized ONLY for the Sign In with
-   LinkedIn using OpenID Connect product. Requesting any other scope makes
-   LinkedIn reject the ENTIRE request ("Bummer, something went wrong").
-   Re-add org scopes ONLY after LinkedIn app review grants them and the
-   probe above returns the Authorize page without an error. Guarded by
-   `tests/oauth-redirects.test.ts`. Consequence: org/page API posting is
-   NOT possible until approval; refresh tokens (`offline_access`) are not
-   obtainable, so LinkedIn tokens are not auto-refreshed; users reconnect
-   after the 60-day expiry.
+1. **Scopes**: The LinkedIn auth URL must ONLY request
+   `openid profile email w_member_social`. Verified against LinkedIn
+   directly (authorization-endpoint probes with client_id `86q9m9ka37vvqo`)
+   and the LinkedIn Developer Console: `openid profile email` and
+   `w_member_social` return the "Authorize" page; adding `r_organization_admin`
+   or `w_organization_social` returns `unauthorized_scope_error` ("Scope ...
+   is not authorized for your application"); adding `offline_access` returns
+   `invalid_scope_error`. The production LinkedIn app is authorized ONLY for
+   the Sign In with LinkedIn using OpenID Connect product (openid profile
+   email) plus Share on LinkedIn (w_member_social). Requesting any other
+   scope makes LinkedIn reject the ENTIRE request ("Bummer, something went
+   wrong"). Re-add org scopes ONLY after LinkedIn app review grants them and
+   the probe above returns the Authorize page without an error. Guarded by
+   `tests/oauth-redirects.test.ts` (exact scope equality). Consequence:
+   org/page API posting is NOT possible until approval; refresh tokens
+   (`offline_access`) are not obtainable, so LinkedIn tokens are not
+   auto-refreshed; users reconnect after the 60-day expiry. The start route
+   logs the generated scope list (`[OAUTH_START]`) for runtime verification.
 2. **Redirect URLs**: NEVER use `req.url` as a redirect base. The image runs
    with `HOSTNAME=0.0.0.0 PORT=3000`, and the Next.js standalone server
    builds `req.url` from those env vars (ignoring the Host header), so

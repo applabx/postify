@@ -43,30 +43,31 @@ test('redirectTo() falls back for local dev when env is unset', async () => {
 // Guard: the auth URL must never contain those scopes until they are
 // provisioned and deliberately re-enabled.
 
-test('LinkedIn auth URL uses only LinkedIn-authorized scopes', async () => {
+test('LinkedIn auth URL requests EXACTLY the authorized scopes', async () => {
   const { getLinkedInAuthUrl } = await import('../lib/oauth/linkedin')
   process.env.NEXT_PUBLIC_APP_URL = 'https://postify.applabx.com'
   process.env.LINKEDIN_CLIENT_ID = 'test-client-id'
 
   const url = getLinkedInAuthUrl('test-state')
-  const decoded = decodeURIComponent(url)
+  const params = new URL(url).searchParams
+  const scope = params.get('scope')
 
-  // Authorized on the production app (verified against LinkedIn directly:
-  // any scope outside this set makes LinkedIn reject with
-  // unauthorized_scope_error / invalid_scope_error)
-  for (const scope of ['openid', 'profile', 'email']) {
-    assert.ok(decoded.includes(scope), `missing scope ${scope} in ${decoded}`)
-  }
+  // Exact scope string — verified against the LinkedIn Developer Console and
+  // LinkedIn's authorization endpoint (openid profile email w_member_social
+  // -> "Authorize" page; any other scope -> unauthorized/invalid_scope_error)
+  assert.equal(scope, 'openid profile email w_member_social',
+    `scope must be exactly "openid profile email w_member_social", got "${scope}"`)
 
-  // Forbidden — not authorized on the LinkedIn app (would reject the
-  // entire authorization request)
-  for (const scope of ['r_organization_admin', 'w_organization_social', 'w_member_social', 'offline_access']) {
-    assert.ok(!decoded.includes(scope), `${scope} must not be requested (not authorized)`)
+  // Hard-fail on every unauthorized scope, even if embedded
+  for (const forbidden of ['r_organization_admin', 'w_organization_social', 'offline_access']) {
+    assert.ok(!scope?.includes(forbidden), `unauthorized scope ${forbidden} present in ${scope}`)
   }
 
   // Redirect URI must use the public URL
-  assert.ok(url.includes(encodeURIComponent('https://postify.applabx.com/api/oauth/linkedin/callback')),
-    `redirect_uri must be the public callback: ${url}`)
+  assert.equal(params.get('redirect_uri'), 'https://postify.applabx.com/api/oauth/linkedin/callback',
+    `redirect_uri must be the public callback: ${params.get('redirect_uri')}`)
+  assert.equal(params.get('response_type'), 'code')
+  assert.ok(params.get('state'), 'state must be present')
   assert.ok(!url.includes('0.0.0.0'), 'internal host leaked into LinkedIn auth URL')
 })
 
