@@ -29,9 +29,13 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV PRISMA_HIDE_UPDATE_MESSAGE=1
 
-RUN groupadd --system --gid 1001 nodejs
-RUN useradd --system --uid 1001 --gid 1001 nextjs
+# Create runtime user WITH home directory. npm/npx write their cache to
+# $HOME/.npm; without /home/nextjs the first npx invocation fails with
+# EACCES and the container enters a restart loop.
+RUN groupadd --system --gid 1001 nodejs \
+    && useradd --system --uid 1001 --gid 1001 -m -d /home/nextjs nextjs
 
 # Copy built app
 COPY --from=builder /app/public ./public
@@ -40,6 +44,11 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+# Prisma CLI (build/index.js) — required by docker-entrypoint.sh to run
+# `prisma migrate deploy` offline. Without it, npx/npm try to download the
+# CLI from the registry at container startup (slow, network-dependent, and
+# the source of the EACCES crash since npm needs a writable HOME first).
+COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 
 # Copy startup script
 COPY --from=builder /app/docker-entrypoint.sh ./

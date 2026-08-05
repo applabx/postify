@@ -7,7 +7,32 @@
 .env.production.local
 .env.test
 .env.test.local
+
+# Source-control metadata — huge build-context bloat otherwise
+.git
+.gitignore
+.gitattributes
+.github
+
+# Dependencies — the deps stage installs the correct platform binaries;
+# copying the host's node_modules (e.g. macOS .dylib) into the builder
+# would silently break the Linux build
+node_modules
+
+# Build output — regenerated inside the image
 .next
-node_modules/.cache
+out
+build
+
+# Local tooling / docs / tests — not needed at runtime
+*.md
+QA
+scripts
+tests
+test-results
+playwright-report
+
+# Misc
 *.log
 .DS_Store
+coverage
