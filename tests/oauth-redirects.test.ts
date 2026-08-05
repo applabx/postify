@@ -85,3 +85,41 @@ test('public redirect routes (verify-email, oauth callbacks) cannot emit interna
       `internal host leaked: ${t}`)
   }
 })
+
+test('validateEnv rejects internal-host NEXT_PUBLIC_APP_URL (runtime misconfiguration guard)', async () => {
+  // Load env module fresh so module-level validation does not interfere
+  const { validateEnv } = await import('../lib/env')
+
+  const backups: Record<string, string | undefined> = {}
+  for (const k of ['NEXT_PUBLIC_APP_URL', 'DATABASE_URL', 'NEXTAUTH_URL', 'NEXTAUTH_SECRET', 'TOKEN_ENCRYPTION_KEY', 'CRON_SECRET', 'NODE_ENV']) {
+    backups[k] = process.env[k]
+  }
+  try {
+    // Provide all required vars so the URL-value checks are exercised
+    process.env.DATABASE_URL = 'postgresql://x:x@localhost:5432/x'
+    process.env.NEXTAUTH_URL = 'https://postify.applabx.com'
+    process.env.NEXTAUTH_SECRET = 'test'
+    process.env.TOKEN_ENCRYPTION_KEY = 'test'
+    process.env.CRON_SECRET = 'test'
+    process.env.NODE_ENV = 'production'
+
+    // Must NOT throw for the correct public URL
+    process.env.NEXT_PUBLIC_APP_URL = 'https://postify.applabx.com'
+    validateEnv()
+
+    // Must throw for internal hosts — the exact production failure mode
+    for (const bad of ['https://0.0.0.0:3000', 'http://localhost:3000', 'http://127.0.0.1:3000']) {
+      process.env.NEXT_PUBLIC_APP_URL = bad
+      assert.throws(() => validateEnv(), new RegExp('NEXT_PUBLIC_APP_URL'), `expected throw for ${bad}`)
+    }
+
+    // Must throw for non-https in production
+    process.env.NEXT_PUBLIC_APP_URL = 'http://postify.applabx.com'
+    assert.throws(() => validateEnv(), new RegExp('https'), 'expected https requirement in production')
+  } finally {
+    for (const [k, v] of Object.entries(backups)) {
+      if (v === undefined) delete process.env[k]
+      else process.env[k] = v
+    }
+  }
+})

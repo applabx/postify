@@ -43,6 +43,30 @@ export function validateEnv(platforms: (keyof typeof PLATFORM_REQUIRED)[] = []) 
       `Missing required environment variables:\n${missing.map(k => `  - ${k}`).join('\n')}\n\nSee .env.example for setup instructions.`
     )
   }
+
+  // The public app URL is the base for EVERY OAuth redirect. A wrong value
+  // (e.g. an internal host leaked from the container environment) silently
+  // breaks every redirect — production served https://0.0.0.0:3000/... for
+  // weeks because of exactly this. Fail fast instead of shipping broken URLs.
+  if (process.env.NEXT_PUBLIC_APP_URL) {
+    try {
+      const parsed = new URL(process.env.NEXT_PUBLIC_APP_URL)
+      const host = parsed.hostname
+      if (host === '0.0.0.0' || host === 'localhost' || host === '127.0.0.1') {
+        throw new Error(
+          `NEXT_PUBLIC_APP_URL must be the public HTTPS URL, got "${process.env.NEXT_PUBLIC_APP_URL}" (internal host "${host}" would break all OAuth redirects).`
+        )
+      }
+      if (parsed.protocol !== 'https:' && process.env.NODE_ENV === 'production') {
+        throw new Error(
+          `NEXT_PUBLIC_APP_URL must use https in production, got "${process.env.NEXT_PUBLIC_APP_URL}".`
+        )
+      }
+    } catch (err: any) {
+      if (err?.message?.startsWith('NEXT_PUBLIC_APP_URL')) throw err
+      throw new Error(`NEXT_PUBLIC_APP_URL is not a valid URL: "${process.env.NEXT_PUBLIC_APP_URL}"`)
+    }
+  }
 }
 
 // Check core env vars at module load time (runs once on server start)
