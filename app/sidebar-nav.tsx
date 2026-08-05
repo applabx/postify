@@ -20,6 +20,8 @@ export default function SidebarNav() {
     { href: '/accounts', label: 'Accounts', icon: '⚙' },
   ]
 
+  const isReviewer = session?.user?.role === 'REVIEWER'
+
   return (
     <aside style={{
       width: 200, minWidth: 200, background: '#ffffff',
@@ -31,6 +33,21 @@ export default function SidebarNav() {
         <div style={{ width: 28, height: 28, background: '#7c6eff', borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, color: 'white' }}>P</div>
         <span style={{ fontSize: 15, fontWeight: 600, color: '#1a1a2e', letterSpacing: '-0.3px' }}>Postify</span>
       </div>
+
+      {isReviewer && (
+        <div style={{
+          margin: '0 4px 12px', padding: '10px 12px', borderRadius: 8,
+          background: 'rgba(124,110,255,0.08)',
+          border: '1px solid rgba(124,110,255,0.25)',
+        }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: '#7c6eff', marginBottom: 2 }}>
+            LinkedIn API Review Account
+          </div>
+          <div style={{ fontSize: 11, color: '#777790', lineHeight: 1.5 }}>
+            This workspace contains demonstration data only.
+          </div>
+        </div>
+      )}
 
       <nav style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
         {navItems.map(item => {

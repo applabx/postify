@@ -20,6 +20,7 @@
     "db:migrate:dev": "prisma migrate dev",
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
+    "seed:reviewer": "tsx scripts/seed-reviewer.ts",
     "db:reset": "prisma db push --force-reset && npm run db:seed",
     "test": "tsx --test tests/*.test.ts"
   },

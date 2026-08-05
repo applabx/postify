@@ -1,0 +1,18 @@
+import { chromium } from 'playwright'
+const browser = await chromium.launch()
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+await page.goto('http://localhost:3021/login', { waitUntil: 'domcontentloaded' })
+await page.waitForSelector('input[type=email]', { timeout: 15000 })
+await page.fill('input[type=email]', 'linkedin-review@postify.applabx.com')
+await page.fill('input[type=password]', 'qpSNk9QYdu6gC8Q3flBJYzSD')
+await page.click('button[type=submit]')
+await page.waitForTimeout(2500)
+await page.goto('http://localhost:3021/compose', { waitUntil: 'domcontentloaded' })
+await page.waitForTimeout(2500)
+const banner = await page.evaluate(() => document.body.innerText.includes('LinkedIn API Review Account') && document.body.innerText.includes('demonstration data only'))
+console.log('Reviewer banner visible:', banner ? 'PASS' : 'FAIL')
+const errors = []
+page.on('console', m => { if (m.type() === 'error') errors.push(m.text().slice(0,100)) })
+await page.waitForTimeout(500)
+console.log('Console errors:', errors.length)
+await browser.close()

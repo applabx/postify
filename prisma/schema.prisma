@@ -13,6 +13,7 @@ model User {
   email         String    @unique
   name          String?
   image         String?
+  role          Role      @default(USER)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -64,6 +65,12 @@ model SocialAccount {
 
   @@unique([userId, platform, externalId])
   @@index([userId, platform])
+}
+
+enum Role {
+  USER
+  REVIEWER
+  ADMIN
 }
 
 enum Platform {

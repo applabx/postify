@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
+import { reviewerResetBlocked } from '@/lib/authz'
 
 const MIN_PASSWORD_LENGTH = 8
 
@@ -28,6 +29,15 @@ export async function POST(req: NextRequest) {
     })
 
     if (!user) {
+      return NextResponse.json(
+        { error: 'Reset token is invalid or has expired. Please request a new one.' },
+        { status: 400 }
+      )
+    }
+
+    // Defense in depth: reviewer accounts can never reset via token.
+    if (reviewerResetBlocked(user)) {
+      console.warn(`[ResetPassword] Reset blocked for reviewer account: ${user.email}`)
       return NextResponse.json(
         { error: 'Reset token is invalid or has expired. Please request a new one.' },
         { status: 400 }

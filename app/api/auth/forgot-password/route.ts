@@ -4,6 +4,7 @@ import { sendEmail, passwordResetTemplate } from '@/lib/email'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import crypto from 'crypto'
+import { reviewerResetBlocked } from '@/lib/authz'
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const RESET_TOKEN_EXPIRY_MS = 60 * 60 * 1000 // 1 hour
@@ -32,6 +33,15 @@ export async function POST(req: NextRequest) {
 
     if (!user) {
       console.log(`[ForgotPassword] No user found for: ${normalizedEmail}`)
+      return NextResponse.json({ success: true, message: genericMessage })
+    }
+
+    // Reviewer accounts never use the password-reset flow: their password is
+    // managed exclusively by `npm run seed:reviewer`. Return the generic
+    // message so the account's existence is not revealed, and do NOT issue a
+    // reset token.
+    if (reviewerResetBlocked(user)) {
+      console.warn(`[ForgotPassword] Reset blocked for reviewer account: ${normalizedEmail}`)
       return NextResponse.json({ success: true, message: genericMessage })
     }
 
