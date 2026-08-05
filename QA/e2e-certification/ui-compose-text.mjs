@@ -1,0 +1,15 @@
+import { chromium } from 'playwright'
+const BASE = 'http://localhost:3002'
+const browser = await chromium.launch()
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+await page.goto(`${BASE}/login`, { waitUntil: 'domcontentloaded' })
+await page.fill('input[type=email]', 'cert@test.local')
+await page.fill('input[type=password]', 'CertPassw0rd!')
+await page.click('button[type=submit]')
+await page.waitForTimeout(2500)
+await page.goto(`${BASE}/compose`, { waitUntil: 'domcontentloaded' })
+await page.waitForTimeout(4000)
+const text = await page.evaluate(() => document.body.innerText)
+console.log('=== COMPOSE PAGE TEXT ===')
+console.log(text.slice(0, 1200))
+await browser.close()
