@@ -107,8 +107,18 @@ export async function checkRateLimitAsync(key: string): Promise<{ allowed: boole
       const results = await pipeline.exec()
 
       if (results && results.length >= 2) {
-        const count = results[0][1] as number
-        const ttl = results[1][1] as number
+        const count = results[0][1]
+        const ttl = results[1][1]
+
+        // On cold start the Redis connection may not be established yet
+        // (lazyConnect + enableOfflineQueue:false causes pipeline commands
+        // to be rejected with undefined results). A non-numeric result
+        // means the counter was not incremented, NOT that the user hit the
+        // limit — fall through to the in-memory limiter instead of
+        // evaluating `undefined <= MAX_ATTEMPTS` (which is always false).
+        if (typeof count !== 'number' || typeof ttl !== 'number') {
+          return checkRateLimit(key)
+        }
 
         // Set expiry on first request in this window
         if (ttl === -1) {
