@@ -69,7 +69,12 @@ export async function publishPost(postId: string): Promise<PublishResult> {
         })
       } else {
         failCount++
-        console.error(`Failed to post to ${target.socialAccount.platform}:`, result.reason)
+        const reason = result.reason as { message?: string; response?: { status?: number } } | undefined
+        console.error(
+          `Failed to post to ${target.socialAccount.platform}: ` +
+          `${reason?.message ?? 'Unknown error'}` +
+          (reason?.response?.status ? ` (HTTP ${reason.response.status})` : '')
+        )
         await prisma.postTarget.update({
           where: { id: target.id },
           data: {

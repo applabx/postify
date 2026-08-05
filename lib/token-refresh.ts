@@ -1,5 +1,5 @@
 import { prisma } from './prisma'
-import axios from 'axios'
+import { http } from './oauth/http'
 import { decryptSecret, encryptSecret } from './secrets'
 import { refreshBlueskySession } from './oauth/platforms'
 
@@ -49,7 +49,7 @@ async function refreshLinkedInToken(accountId: string, refreshToken: string) {
     client_secret: process.env.LINKEDIN_CLIENT_SECRET!,
   })
 
-  const res = await axios.post('https://www.linkedin.com/oauth/v2/accessToken', params.toString(), {
+  const res = await http.post('https://www.linkedin.com/oauth/v2/accessToken', params.toString(), {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
   })
 
@@ -66,7 +66,7 @@ async function refreshLinkedInToken(accountId: string, refreshToken: string) {
 
 async function refreshMetaToken(accountId: string, currentToken: string) {
   // Meta long-lived tokens can be extended for another 60 days
-  const res = await axios.get('https://graph.facebook.com/v19.0/oauth/access_token', {
+  const res = await http.get('https://graph.facebook.com/v19.0/oauth/access_token', {
     params: {
       grant_type: 'fb_exchange_token',
       client_id: process.env.META_CLIENT_ID!,
@@ -90,7 +90,7 @@ async function refreshTwitterToken(accountId: string, refreshToken: string) {
     `${process.env.TWITTER_CLIENT_ID}:${process.env.TWITTER_CLIENT_SECRET}`
   ).toString('base64')
 
-  const res = await axios.post(
+  const res = await http.post(
     'https://api.twitter.com/2/oauth2/token',
     new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshToken }).toString(),
     { headers: { Authorization: `Basic ${credentials}`, 'Content-Type': 'application/x-www-form-urlencoded' } }
@@ -112,7 +112,7 @@ async function refreshPinterestToken(accountId: string, refreshToken: string) {
     `${process.env.PINTEREST_CLIENT_ID}:${process.env.PINTEREST_CLIENT_SECRET}`
   ).toString('base64')
 
-  const res = await axios.post(
+  const res = await http.post(
     'https://api.pinterest.com/v5/oauth/token',
     new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshToken }).toString(),
     { headers: { Authorization: `Basic ${credentials}`, 'Content-Type': 'application/x-www-form-urlencoded' } }

@@ -26,8 +26,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'No file provided' }, { status: 400 })
   }
 
-  // Validate file type by magic bytes (defense against spoofed Content-Type)
-  const buffer = Buffer.from(await file.arrayBuffer())
+  // Validate file type by magic bytes (defense against spoofed Content-Type).
+  // Read only the first 8 bytes — do NOT buffer the whole (up to 512MB) file
+  // into memory; the full file is streamed to Cloudinary via FormData.
   const magicBytes: Record<string, string[]> = {
     'image/jpeg': ['ffd8ff'],
     'image/png': ['89504e47'],
@@ -37,7 +38,7 @@ export async function POST(req: NextRequest) {
     'video/mov': ['00000014667479707174', '0000001c66747970'],
     'video/quicktime': ['00000014667479707174'],
   }
-  const header = buffer.subarray(0, 8).toString('hex')
+  const header = Buffer.from(await file.slice(0, 8).arrayBuffer()).toString('hex')
   const matchedType = Object.entries(magicBytes).find(([_, sigs]) =>
     sigs.some(sig => header.startsWith(sig))
   )?.[0]

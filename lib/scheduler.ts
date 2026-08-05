@@ -9,6 +9,12 @@ let publishQueue: Bull.Queue | null = null
 function initQueue(): Bull.Queue {
   const queue = new Bull('postify:publish', {
     redis: process.env.REDIS_URL || 'redis://localhost:6379',
+    // A multi-platform publish can take longer than Bull's default 30s job
+    // lock (image uploads, slow platform APIs). With the default lock, the
+    // stalled-job checker re-processes a still-running job -> duplicate
+    // publishes. 5 minutes comfortably covers a full multi-platform run
+    // while still surfacing genuinely hung jobs.
+    settings: { lockDuration: 300000 },
     defaultJobOptions: {
       attempts: 3,
       backoff: { type: 'exponential', delay: 5000 },

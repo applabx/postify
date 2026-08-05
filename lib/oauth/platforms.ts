@@ -1,4 +1,4 @@
-import axios from 'axios'
+import { http } from './http'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TWITTER / X
@@ -24,7 +24,7 @@ export async function exchangeTwitterCode(code: string, codeVerifier: string) {
     `${process.env.TWITTER_CLIENT_ID}:${process.env.TWITTER_CLIENT_SECRET}`
   ).toString('base64')
 
-  const res = await axios.post(
+  const res = await http.post(
     `${TWITTER_API}/oauth2/token`,
     new URLSearchParams({
       code,
@@ -43,7 +43,7 @@ export async function exchangeTwitterCode(code: string, codeVerifier: string) {
 }
 
 export async function getTwitterProfile(accessToken: string) {
-  const res = await axios.get(`${TWITTER_API}/users/me`, {
+  const res = await http.get(`${TWITTER_API}/users/me`, {
     headers: { Authorization: `Bearer ${accessToken}` },
     params: { 'user.fields': 'id,name,username,profile_image_url' },
   })
@@ -58,7 +58,7 @@ export async function postTweet(params: {
   const body: any = { text: params.text }
   if (params.mediaIds?.length) body.media = { media_ids: params.mediaIds }
 
-  const res = await axios.post(`${TWITTER_API}/tweets`, body, {
+  const res = await http.post(`${TWITTER_API}/tweets`, body, {
     headers: {
       Authorization: `Bearer ${params.accessToken}`,
       'Content-Type': 'application/json',
@@ -74,7 +74,7 @@ export async function postTweet(params: {
 const BLUESKY_API = 'https://bsky.social/xrpc'
 
 export async function authenticateBluesky(handle: string, appPassword: string) {
-  const res = await axios.post(`${BLUESKY_API}/com.atproto.server.createSession`, {
+  const res = await http.post(`${BLUESKY_API}/com.atproto.server.createSession`, {
     identifier: handle,
     password: appPassword,
   })
@@ -88,7 +88,7 @@ export async function authenticateBluesky(handle: string, appPassword: string) {
 }
 
 export async function refreshBlueskySession(refreshJwt: string) {
-  const res = await axios.post(
+  const res = await http.post(
     `${BLUESKY_API}/com.atproto.server.refreshSession`,
     null,
     { headers: { Authorization: `Bearer ${refreshJwt}` } }
@@ -122,7 +122,7 @@ export async function postToBluesky(params: {
     }
   }
 
-  const res = await axios.post(
+  const res = await http.post(
     `${BLUESKY_API}/com.atproto.repo.createRecord`,
     {
       repo: params.did,
@@ -140,7 +140,7 @@ export async function uploadBlueskyBlob(params: {
   imageBuffer: Buffer
   mimeType: string
 }) {
-  const res = await axios.post(`${BLUESKY_API}/com.atproto.repo.uploadBlob`, params.imageBuffer, {
+  const res = await http.post(`${BLUESKY_API}/com.atproto.repo.uploadBlob`, params.imageBuffer, {
     headers: {
       Authorization: `Bearer ${params.accessJwt}`,
       'Content-Type': params.mimeType,
@@ -171,7 +171,7 @@ export async function exchangePinterestCode(code: string) {
     `${process.env.PINTEREST_CLIENT_ID}:${process.env.PINTEREST_CLIENT_SECRET}`
   ).toString('base64')
 
-  const res = await axios.post(
+  const res = await http.post(
     `${PINTEREST_API}/oauth/token`,
     new URLSearchParams({
       grant_type: 'authorization_code',
@@ -189,7 +189,7 @@ export async function exchangePinterestCode(code: string) {
 }
 
 export async function getPinterestBoards(accessToken: string) {
-  const res = await axios.get(`${PINTEREST_API}/boards`, {
+  const res = await http.get(`${PINTEREST_API}/boards`, {
     headers: { Authorization: `Bearer ${accessToken}` },
     params: { page_size: 100 },
   })
@@ -204,7 +204,7 @@ export async function postToPinterest(params: {
   mediaUrl: string
   link?: string
 }): Promise<string> {
-  const res = await axios.post(
+  const res = await http.post(
     `${PINTEREST_API}/pins`,
     {
       board_id: params.boardId,

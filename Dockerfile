@@ -60,4 +60,10 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
+# Liveness/readiness probe for the container orchestrator. The image ships
+# Node, so probe the public health endpoint with node's fetch instead of
+# adding curl to the runtime image.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+
 CMD ["./docker-entrypoint.sh"]

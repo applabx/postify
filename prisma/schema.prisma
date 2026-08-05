@@ -110,6 +110,8 @@ model Post {
 
   targets     PostTarget[]
   scheduledJob ScheduledJob?
+
+  @@index([userId])
 }
 
 enum PostStatus {

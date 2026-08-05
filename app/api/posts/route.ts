@@ -5,12 +5,21 @@ import { prisma } from '@/lib/prisma'
 import { publishPost } from '@/lib/publisher'
 import { z } from 'zod'
 import { rateLimit, rateLimitKey, RATE_LIMITS } from '@/lib/rate-limit'
+import { validateMediaUrls } from '@/lib/media-url'
+
+const POST_STATUSES = ['DRAFT', 'SCHEDULED', 'PUBLISHING', 'PUBLISHED', 'PARTIAL', 'FAILED'] as const
 
 const CreatePostSchema = z.object({
   text: z.string().min(1).max(63206),
   mediaUrls: z.array(z.string().url()).max(10).default([]),
   targetAccountIds: z.array(z.string()).min(1),
   scheduledAt: z.string().datetime().optional(), // ISO string if scheduling
+})
+
+const ListPostsQuery = z.object({
+  status: z.enum(POST_STATUSES).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  page: z.coerce.number().int().min(1).default(1),
 })
 
 function detectMediaType(url: string): 'image' | 'video' {
@@ -34,13 +43,25 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const body = await req.json()
+  let body: unknown
+  try {
+    body = await req.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+  }
   const parsed = CreatePostSchema.safeParse(body)
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
   }
 
   const { text, mediaUrls, targetAccountIds, scheduledAt } = parsed.data
+
+  // SSRF guard: media URLs are fetched server-side at publish time
+  // (Bluesky), so only public HTTPS URLs may be accepted.
+  const mediaErr = validateMediaUrls(mediaUrls)
+  if (mediaErr) {
+    return NextResponse.json({ error: `Invalid media URL: ${mediaErr[0]} (${mediaErr[1]})` }, { status: 400 })
+  }
 
   // Validate schedule is in the future
   if (scheduledAt && new Date(scheduledAt) <= new Date()) {
@@ -119,14 +140,20 @@ export async function GET(req: NextRequest) {
   }
 
   const { searchParams } = new URL(req.url)
-  const status = searchParams.get('status') // "SCHEDULED" | "PUBLISHED" etc.
-  const limit = Number(searchParams.get('limit') || '20')
-  const page = Number(searchParams.get('page') || '1')
+  const query = ListPostsQuery.safeParse({
+    status: searchParams.get('status') ?? undefined,
+    limit: searchParams.get('limit') ?? undefined,
+    page: searchParams.get('page') ?? undefined,
+  })
+  if (!query.success) {
+    return NextResponse.json({ error: query.error.flatten() }, { status: 400 })
+  }
+  const { status, limit, page } = query.data
 
   const posts = await prisma.post.findMany({
     where: {
       userId: session.user.id,
-      ...(status && { status: status as any }),
+      ...(status && { status }),
     },
     include: {
       targets: {
@@ -142,5 +169,12 @@ export async function GET(req: NextRequest) {
     skip: (page - 1) * limit,
   })
 
-  return NextResponse.json({ posts })
+  const total = await prisma.post.count({
+    where: {
+      userId: session.user.id,
+      ...(status && { status }),
+    },
+  })
+
+  return NextResponse.json({ posts, total, page, pageSize: limit })
 }

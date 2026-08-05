@@ -1,4 +1,4 @@
-import axios from 'axios'
+import { http } from './http'
 
 const LINKEDIN_API = 'https://api.linkedin.com/v2'
 const LINKEDIN_AUTH = 'https://www.linkedin.com/oauth/v2'
@@ -65,7 +65,7 @@ export async function exchangeLinkedInCode(code: string, appOrigin?: string): Pr
     client_secret: process.env.LINKEDIN_CLIENT_SECRET!,
   })
 
-  const res = await axios.post(`${LINKEDIN_AUTH}/accessToken`, params.toString(), {
+  const res = await http.post(`${LINKEDIN_AUTH}/accessToken`, params.toString(), {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
   })
 
@@ -83,7 +83,7 @@ export async function getLinkedInProfile(accessToken: string): Promise<{
   email: string
   picture?: string
 }> {
-  const res = await axios.get(`${LINKEDIN_API}/userinfo`, {
+  const res = await http.get(`${LINKEDIN_API}/userinfo`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   })
   return {
@@ -98,7 +98,7 @@ export async function getLinkedInProfile(accessToken: string): Promise<{
 // This is the key call — returns whatever pages they manage, not hardcoded ones
 export async function getLinkedInAdminPages(accessToken: string): Promise<LinkedInPage[]> {
   // Fetch all organizations where this person has ADMINISTRATOR role
-  const res = await axios.get(`${LINKEDIN_API}/organizationAcls`, {
+  const res = await http.get(`${LINKEDIN_API}/organizationAcls`, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
       'LinkedIn-Version': '202304',
@@ -170,7 +170,7 @@ export async function postToLinkedIn(params: {
     visibility: { 'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC' },
   }
 
-  const res = await axios.post(`${LINKEDIN_API}/ugcPosts`, body, {
+  const res = await http.post(`${LINKEDIN_API}/ugcPosts`, body, {
     headers: {
       Authorization: `Bearer ${params.accessToken}`,
       'Content-Type': 'application/json',

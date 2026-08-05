@@ -1,4 +1,4 @@
-import axios from 'axios'
+import { http } from './http'
 
 const META_GRAPH = 'https://graph.facebook.com/v19.0'
 const META_AUTH = 'https://www.facebook.com/dialog/oauth'
@@ -47,7 +47,7 @@ export async function exchangeMetaCode(code: string, appOrigin?: string): Promis
 }> {
   const origin = appOrigin || process.env.NEXT_PUBLIC_APP_URL!
   const redirectUri = `${origin}/api/oauth/meta/callback`
-  const res = await axios.get(`${META_GRAPH}/oauth/access_token`, {
+  const res = await http.get(`${META_GRAPH}/oauth/access_token`, {
     params: {
       client_id: process.env.META_CLIENT_ID!,
       client_secret: process.env.META_CLIENT_SECRET!,
@@ -60,7 +60,7 @@ export async function exchangeMetaCode(code: string, appOrigin?: string): Promis
 
 // ─── Step 3: Get long-lived token (60 days vs 1 hour) ────────────────────────
 export async function getLongLivedToken(shortToken: string): Promise<string> {
-  const res = await axios.get(`${META_GRAPH}/oauth/access_token`, {
+  const res = await http.get(`${META_GRAPH}/oauth/access_token`, {
     params: {
       grant_type: 'fb_exchange_token',
       client_id: process.env.META_CLIENT_ID!,
@@ -73,7 +73,7 @@ export async function getLongLivedToken(shortToken: string): Promise<string> {
 
 // ─── Step 4: Get all Pages this user manages ─────────────────────────────────
 export async function getFacebookPages(userToken: string): Promise<FacebookPage[]> {
-  const res = await axios.get(`${META_GRAPH}/me/accounts`, {
+  const res = await http.get(`${META_GRAPH}/me/accounts`, {
     params: {
       access_token: userToken,
       fields: 'id,name,category,picture,access_token,instagram_business_account',
@@ -101,7 +101,7 @@ export async function getFacebookPages(userToken: string): Promise<FacebookPage[
 
 // ─── Step 5: Get all Groups this user manages ────────────────────────────────
 export async function getFacebookGroups(userToken: string): Promise<FacebookGroup[]> {
-  const res = await axios.get(`${META_GRAPH}/me/groups`, {
+  const res = await http.get(`${META_GRAPH}/me/groups`, {
     params: {
       access_token: userToken,
       fields: 'id,name,privacy,picture',
@@ -126,7 +126,7 @@ export async function getFacebookGroups(userToken: string): Promise<FacebookGrou
 
 // ─── Step 6: Get Instagram account linked to a Facebook Page ─────────────────
 export async function getInstagramAccount(pageId: string, pageToken: string) {
-  const res = await axios.get(`${META_GRAPH}/${pageId}`, {
+  const res = await http.get(`${META_GRAPH}/${pageId}`, {
     params: {
       access_token: pageToken,
       fields: 'instagram_business_account{id,name,username,profile_picture_url}',
@@ -137,7 +137,7 @@ export async function getInstagramAccount(pageId: string, pageToken: string) {
 
 // ─── Step 7: Get Threads profile ─────────────────────────────────────────────
 export async function getThreadsProfile(accessToken: string) {
-  const res = await axios.get(`https://graph.threads.net/v1.0/me`, {
+  const res = await http.get(`https://graph.threads.net/v1.0/me`, {
     params: { access_token: accessToken, fields: 'id,name,username,threads_profile_picture_url' },
   })
   return res.data
@@ -156,7 +156,7 @@ export async function postToFacebookPage(params: {
 }): Promise<string> {
   if (params.mediaUrls?.length === 1) {
     // Single photo post
-    const res = await axios.post(`${META_GRAPH}/${params.pageId}/photos`, {
+    const res = await http.post(`${META_GRAPH}/${params.pageId}/photos`, {
       url: params.mediaUrls[0],
       caption: params.message,
       access_token: params.pageAccessToken,
@@ -166,14 +166,14 @@ export async function postToFacebookPage(params: {
     // Multi-photo: stage each then post as batch
     const photoIds = await Promise.all(
       params.mediaUrls.map(url =>
-        axios.post(`${META_GRAPH}/${params.pageId}/photos`, {
+        http.post(`${META_GRAPH}/${params.pageId}/photos`, {
           url,
           published: false,
           access_token: params.pageAccessToken,
         }).then(r => ({ media_fbid: r.data.id }))
       )
     )
-    const res = await axios.post(`${META_GRAPH}/${params.pageId}/feed`, {
+    const res = await http.post(`${META_GRAPH}/${params.pageId}/feed`, {
       message: params.message,
       attached_media: photoIds,
       access_token: params.pageAccessToken,
@@ -181,7 +181,7 @@ export async function postToFacebookPage(params: {
     return res.data.id
   } else {
     // Text-only post
-    const res = await axios.post(`${META_GRAPH}/${params.pageId}/feed`, {
+    const res = await http.post(`${META_GRAPH}/${params.pageId}/feed`, {
       message: params.message,
       access_token: params.pageAccessToken,
     })
@@ -195,7 +195,7 @@ export async function postToFacebookGroup(params: {
   userAccessToken: string
   message: string
 }): Promise<string> {
-  const res = await axios.post(`${META_GRAPH}/${params.groupId}/feed`, {
+  const res = await http.post(`${META_GRAPH}/${params.groupId}/feed`, {
     message: params.message,
     access_token: params.userAccessToken,
   })
@@ -215,7 +215,7 @@ export async function postToInstagram(params: {
     // Step 1: Create child media containers
     const childIds = await Promise.all(
       params.mediaUrls.map(url =>
-        axios.post(`${META_GRAPH}/${params.igAccountId}/media`, {
+        http.post(`${META_GRAPH}/${params.igAccountId}/media`, {
           image_url: url,
           is_carousel_item: true,
           access_token: params.pageAccessToken,
@@ -224,7 +224,7 @@ export async function postToInstagram(params: {
     )
 
     // Step 2: Create carousel container
-    const containerRes = await axios.post(`${META_GRAPH}/${params.igAccountId}/media`, {
+    const containerRes = await http.post(`${META_GRAPH}/${params.igAccountId}/media`, {
       media_type: 'CAROUSEL',
       children: childIds,
       caption: params.caption,
@@ -233,7 +233,7 @@ export async function postToInstagram(params: {
     const containerId = containerRes.data.id
 
     // Step 3: Publish
-    const publishRes = await axios.post(`${META_GRAPH}/${params.igAccountId}/media_publish`, {
+    const publishRes = await http.post(`${META_GRAPH}/${params.igAccountId}/media_publish`, {
       creation_id: containerId,
       access_token: params.pageAccessToken,
     })
@@ -252,11 +252,11 @@ export async function postToInstagram(params: {
     mediaBody.image_url = params.mediaUrl
   }
 
-  const containerRes = await axios.post(`${META_GRAPH}/${params.igAccountId}/media`, mediaBody)
+  const containerRes = await http.post(`${META_GRAPH}/${params.igAccountId}/media`, mediaBody)
   const containerId = containerRes.data.id
 
   // Step 2: Publish container
-  const publishRes = await axios.post(`${META_GRAPH}/${params.igAccountId}/media_publish`, {
+  const publishRes = await http.post(`${META_GRAPH}/${params.igAccountId}/media_publish`, {
     creation_id: containerId,
     access_token: params.pageAccessToken,
   })
@@ -273,7 +273,7 @@ export async function postToThreads(params: {
   const base = 'https://graph.threads.net/v1.0'
 
   // Step 1: Create container
-  const containerRes = await axios.post(`${base}/${params.threadsUserId}/threads`, {
+  const containerRes = await http.post(`${base}/${params.threadsUserId}/threads`, {
     media_type: params.mediaUrl ? 'IMAGE' : 'TEXT',
     text: params.text,
     ...(params.mediaUrl && { image_url: params.mediaUrl }),
@@ -281,7 +281,7 @@ export async function postToThreads(params: {
   })
 
   // Step 2: Publish
-  const publishRes = await axios.post(`${base}/${params.threadsUserId}/threads_publish`, {
+  const publishRes = await http.post(`${base}/${params.threadsUserId}/threads_publish`, {
     creation_id: containerRes.data.id,
     access_token: params.accessToken,
   })
