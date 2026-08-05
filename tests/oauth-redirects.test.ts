@@ -65,3 +65,23 @@ test('LinkedIn auth URL uses only provisioned scopes', async () => {
     `redirect_uri must be the public callback: ${url}`)
   assert.ok(!url.includes('0.0.0.0'), 'internal host leaked into LinkedIn auth URL')
 })
+
+test('public redirect routes (verify-email, oauth callbacks) cannot emit internal hosts', async () => {
+  const { redirectTo } = await import('../lib/redirect-url')
+  process.env.NEXT_PUBLIC_APP_URL = 'https://postify.applabx.com'
+
+  // The exact redirect targets these routes produce for error/edge cases
+  const targets = [
+    redirectTo('/login?error=verification_failed'),
+    redirectTo('/login?verified=1'),
+    redirectTo('/accounts?error=linkedin_denied'),
+    redirectTo('/accounts?error=linkedin_state_mismatch'),
+    redirectTo('/accounts?error=linkedin_failed'),
+    redirectTo('/accounts?success=linkedin'),
+  ]
+  for (const t of targets) {
+    assert.ok(t.startsWith('https://postify.applabx.com'), `wrong base: ${t}`)
+    assert.ok(!t.includes('0.0.0.0') && !t.includes('localhost') && !t.includes('127.0.0.1'),
+      `internal host leaked: ${t}`)
+  }
+})
