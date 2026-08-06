@@ -247,6 +247,9 @@ jobs:
   release-checklist:
     needs: [build-and-push, smoke-test]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: read
     if: always() && needs.build-and-push.result == 'success' && needs.smoke-test.result == 'success'
     steps:
       - name: Verify CI passed for this SHA
