@@ -37,9 +37,9 @@ function TwitterConnectContent() {
       setMessage(msgs[error] || `Error: ${error}`)
     } else {
       // Not a result page — redirect to start OAuth
-      window.location.href = '/api/oauth/twitter/start'
+      router.replace('/api/oauth/twitter/start')
     }
-  }, [searchParams])
+  }, [searchParams, router])
 
   if (status === 'loading') {
     return (
@@ -80,7 +80,7 @@ function TwitterConnectContent() {
           {status === 'error' && (
             <button
               style={{ ...s.btnPrimary, flex: 1 }}
-              onClick={() => { window.location.href = '/api/oauth/twitter/start' }}
+              onClick={() => { router.push('/api/oauth/twitter/start') }}
             >
               Try again
             </button>

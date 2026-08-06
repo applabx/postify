@@ -31,6 +31,11 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PRISMA_HIDE_UPDATE_MESSAGE=1
 
+# Remove the base image's bundled global npm. Runtime never invokes npm/npx
+# (docker-entrypoint.sh uses node directly), and the bundled npm ships
+# vulnerable packages (tar, sigstore) flagged by the Trivy gate.
+RUN rm -rf /usr/local/lib/node_modules/npm
+
 # Create runtime user WITH home directory. npm/npx write their cache to
 # $HOME/.npm; without /home/nextjs the first npx invocation fails with
 # EACCES and the container enters a restart loop.

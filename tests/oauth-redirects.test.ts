@@ -106,7 +106,7 @@ test('validateEnv rejects internal-host NEXT_PUBLIC_APP_URL (runtime misconfigur
     process.env.NEXTAUTH_SECRET = 'test'
     process.env.TOKEN_ENCRYPTION_KEY = 'test'
     process.env.CRON_SECRET = 'test'
-    process.env.NODE_ENV = 'production'
+    ;(process.env as Record<string, string | undefined>)['NODE_ENV'] = 'production'
 
     // Must NOT throw for the correct public URL
     process.env.NEXT_PUBLIC_APP_URL = 'https://postify.applabx.com'
