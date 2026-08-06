@@ -23,6 +23,9 @@ RUN npx prisma generate
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npx next build --webpack
 
+# Build the dedicated publish worker bundle (dist/worker/worker.js)
+RUN node scripts/build-worker.mjs
+
 # ─── Runner ───────────────────────────────────────────────────────────────────
 FROM base AS runner
 WORKDIR /app
@@ -58,6 +61,9 @@ COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 # Copy startup script
 COPY --from=builder /app/docker-entrypoint.sh ./
 RUN chmod +x docker-entrypoint.sh
+
+# Dedicated publish worker bundle (run with `PUBLISH_WORKER=true node worker.js`)
+COPY --from=builder /app/dist/worker/worker.js ./worker.js
 
 USER nextjs
 

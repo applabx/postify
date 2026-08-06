@@ -242,7 +242,8 @@ jobs:
             echo "origin body head: $(printf '%s' "$body" | head -c 160)"
           fi
           printf '%s' "$body" | sed 's/__CURL_EXIT__:.*//' > /tmp/health.json
-          python3 scripts/check-health.py /tmp/health.json '${{ github.sha }}'
+          REQUIRE_IMAGE_DIGEST=${{ vars.PROD_REQUIRE_DIGEST == 'true' }} \
+            python3 scripts/check-health.py /tmp/health.json '${{ github.sha }}' '${{ needs.build-and-push.outputs.digest }}'
 
   release-checklist:
     needs: [build-and-push, smoke-test]

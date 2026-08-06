@@ -8,7 +8,7 @@ const baseline = JSON.parse(fs.readFileSync(baselinePath, 'utf8'))
 const result = spawnSync(
   process.execPath,
   ['./node_modules/eslint/bin/eslint.js', '--format', 'json', '.'],
-  { encoding: 'utf8' }
+  { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 }
 )
 
 const report = JSON.parse(result.stdout || '[]')

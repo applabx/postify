@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma'
 import { isValidOAuthState, clearOAuthStateCookie } from '@/lib/oauth-state'
 import { storeOAuthData } from '@/lib/oauth-temp-store'
 import { redirectTo } from '@/lib/redirect-url'
+import { oauthEvent, oauthError } from '@/lib/oauth/telemetry'
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -19,10 +20,12 @@ export async function GET(req: NextRequest) {
   const error = searchParams.get('error')
 
   if (!isValidOAuthState(req, 'pinterest', state)) {
+    oauthEvent('pinterest', 'callback', 'state_mismatch')
     return NextResponse.redirect(redirectTo('/accounts?error=pinterest_state_mismatch'))
   }
 
   if (error || !code) {
+    oauthEvent('pinterest', 'callback', 'denied')
     return NextResponse.redirect(redirectTo('/accounts?error=pinterest_denied'))
   }
 
@@ -42,9 +45,11 @@ export async function GET(req: NextRequest) {
       redirectTo(`/accounts/connect/pinterest?key=${key}`)
     )
     clearOAuthStateCookie(res, 'pinterest')
+    oauthEvent('pinterest', 'callback', 'success')
     return res
   } catch (err: any) {
     console.error('Pinterest OAuth error:', err.response?.data || err.message)
+    oauthError('pinterest', 'callback', err)
     return NextResponse.redirect(redirectTo('/accounts?error=pinterest_failed'))
   }
 }

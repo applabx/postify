@@ -7,6 +7,7 @@ import { getTwitterAuthUrl, getPinterestAuthUrl } from '@/lib/oauth/platforms'
 import { randomBytes, createHash, createHmac } from 'crypto'
 import { setOAuthStateCookie } from '@/lib/oauth-state'
 import { redirectTo } from '@/lib/redirect-url'
+import { oauthEvent, oauthError } from '@/lib/oauth/telemetry'
 
 // GET /api/oauth/[platform]/start
 // Redirects the user to the correct OAuth consent screen
@@ -22,8 +23,19 @@ export async function GET(
   const { platform } = await params
   const state = randomBytes(16).toString('hex')
 
+  try {
+    return await buildAuthUrl(platform, state)
+  } catch (err) {
+    console.error(`[OAuth] start failed for ${platform}:`, err)
+    oauthError(platform, 'start', err)
+    return NextResponse.redirect(redirectTo(`/accounts?error=${platform}_failed`))
+  }
+}
+
+async function buildAuthUrl(platform: string, state: string) {
   // Store state in a short-lived cookie to verify on callback
   const response = (url: string, statePlatform: string) => {
+    oauthEvent(platform, 'start', 'redirect')
     const res = NextResponse.redirect(url)
     setOAuthStateCookie(res, statePlatform, state)
     return res
@@ -75,10 +87,12 @@ export async function GET(
 
     case 'bluesky': {
       // Bluesky uses app passwords, not OAuth — redirect to form page
+      oauthEvent(platform, 'start', 'redirect')
       return NextResponse.redirect(redirectTo('/accounts/connect/bluesky'))
     }
 
     default:
+      oauthEvent(platform, 'start', 'unknown_platform')
       return NextResponse.json({ error: `Unknown platform: ${platform}` }, { status: 400 })
   }
 }

@@ -2,6 +2,7 @@ import { prisma } from './prisma'
 import { http } from './oauth/http'
 import { decryptSecret, encryptSecret } from './secrets'
 import { refreshBlueskySession } from './oauth/platforms'
+import { safeCaptureException } from './sentry'
 
 // Run this on a cron job daily: refreshes tokens expiring within 7 days
 export async function refreshExpiringTokens() {
@@ -32,6 +33,7 @@ export async function refreshExpiringTokens() {
       }
     } catch (err: any) {
       console.error(`[TokenRefresh] Failed for account ${account.id} (${account.platform}):`, err.message)
+      safeCaptureException(err, { phase: 'token-refresh', platform: account.platform })
       // Mark as expired so user sees the reconnect prompt
       await prisma.socialAccount.update({
         where: { id: account.id },

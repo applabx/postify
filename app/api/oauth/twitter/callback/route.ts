@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma'
 import { isValidOAuthState, clearOAuthStateCookie } from '@/lib/oauth-state'
 import { encryptSecret } from '@/lib/secrets'
 import { redirectTo } from '@/lib/redirect-url'
+import { oauthEvent, oauthError } from '@/lib/oauth/telemetry'
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -20,10 +21,12 @@ export async function GET(req: NextRequest) {
 
   // Verify state to prevent CSRF
   if (!isValidOAuthState(req, 'twitter', state)) {
+    oauthEvent('twitter', 'callback', 'state_mismatch')
     return NextResponse.redirect(redirectTo('/accounts?error=twitter_state_mismatch'))
   }
 
   if (error || !code) {
+    oauthEvent('twitter', 'callback', 'denied')
     return NextResponse.redirect(redirectTo('/accounts?error=twitter_denied'))
   }
 
@@ -76,10 +79,12 @@ export async function GET(req: NextRequest) {
     // Clear PKCE cookies
     const res = NextResponse.redirect(redirectTo('/accounts?success=twitter'))
     clearOAuthStateCookie(res, 'twitter')
+    oauthEvent('twitter', 'callback', 'success')
     res.cookies.delete('twitter_code_verifier')
     return res
   } catch (err: any) {
     console.error('Twitter OAuth error:', err.response?.data || err.message)
+    oauthError('twitter', 'callback', err)
     return NextResponse.redirect(redirectTo('/accounts?error=twitter_failed'))
   }
 }

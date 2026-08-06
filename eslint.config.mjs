@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Generated artifacts (dedicated worker bundle).
+    "dist/**",
     // QA diagnostic tooling (throwaway scripts and browser harnesses) is not
     // part of the application and is excluded from the lint gate.
     "QA/**",

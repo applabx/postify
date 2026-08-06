@@ -12,6 +12,7 @@ import { prisma } from '@/lib/prisma'
 import { storeOAuthData } from '@/lib/oauth-temp-store'
 import { ensureSessionUser } from '@/lib/session-user'
 import { redirectTo } from '@/lib/redirect-url'
+import { oauthEvent, oauthError } from '@/lib/oauth/telemetry'
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -25,10 +26,12 @@ export async function GET(req: NextRequest) {
   const error = searchParams.get('error')
 
   if (!isValidOAuthState(req, 'meta', state)) {
+    oauthEvent('meta', 'callback', 'state_mismatch')
     return NextResponse.redirect(redirectTo('/accounts?error=meta_state_mismatch'))
   }
 
   if (error || !code) {
+    oauthEvent('meta', 'callback', 'denied')
     return NextResponse.redirect(redirectTo('/accounts?error=meta_denied'))
   }
 
@@ -54,10 +57,12 @@ export async function GET(req: NextRequest) {
       redirectTo(`/accounts/connect/meta?key=${key}`)
     )
     clearOAuthStateCookie(res, 'meta')
+    oauthEvent('meta', 'callback', 'success')
     return res
   } catch (err: unknown) {
     const error = err as { response?: { data?: unknown }; message?: string }
     console.error('Meta OAuth error:', error.response?.data || error.message)
+    oauthError('meta', 'callback', err)
     return NextResponse.redirect(redirectTo('/accounts?error=meta_failed'))
   }
 }

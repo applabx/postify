@@ -1,6 +1,7 @@
 import Bull from 'bull'
 import { prisma } from './prisma'
 import { publishPost } from './publisher'
+import { safeCaptureException, safeCaptureMessage } from './sentry'
 import './env'  // startup env validation (runs on import)
 
 // ─── Queue setup ─────────────────────────────────────────────────────────────
@@ -16,13 +17,33 @@ function initQueue(): Bull.Queue {
     // while still surfacing genuinely hung jobs.
     settings: { lockDuration: 300000 },
     defaultJobOptions: {
-      attempts: 3,
+      // 5 attempts × exponential backoff 5s/10s/20s/40s/80s covers short
+      // PostgreSQL/Redis restarts (transient DB errors during the outage
+      // window would otherwise exhaust 3 attempts and strand PENDING
+      // targets until a manual queue retry).
+      attempts: 5,
       backoff: { type: 'exponential', delay: 5000 },
       removeOnComplete: 100,
       removeOnFail: 200,
     },
   })
 
+  return queue
+}
+
+// ─── Processing mode ─────────────────────────────────────────────────────────
+// PUBLISH_WORKER env selects who registers the Bull processor:
+//   'true'  → this process is a dedicated worker (always processes)
+//   'false' → this process never processes (web in a split deployment)
+//   unset   → legacy single-process mode: the web process processes (backwards
+//             compatible with existing deployments)
+export function queueShouldProcessLocally(): boolean {
+  return process.env.PUBLISH_WORKER !== 'true' && process.env.PUBLISH_WORKER !== 'false'
+}
+
+// Registers the publish processor + queue event handlers. Called exactly once
+// by the process that owns processing (worker entry or web instrumentation).
+export function registerPublishProcessor(queue: Bull.Queue): void {
   // ─── Process jobs ─────────────────────────────────────────────────────
   queue.process(async (job) => {
     const { postId } = job.data
@@ -39,13 +60,13 @@ function initQueue(): Bull.Queue {
 
   queue.on('failed', (job, err) => {
     console.error(`[Queue] Job ${job.id} failed:`, err.message)
+    safeCaptureException(err, { phase: 'queue-job-failed', jobId: String(job.id) })
   })
 
   queue.on('stalled', (job) => {
     console.warn(`[Queue] Job ${job.id} stalled`)
+    safeCaptureMessage('Queue job stalled', 'warning', { phase: 'queue-job-stalled', jobId: String(job.id) })
   })
-
-  return queue
 }
 
 export function getPublishQueue(): Bull.Queue {

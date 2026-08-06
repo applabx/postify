@@ -12,6 +12,7 @@ import { encryptSecret } from '@/lib/secrets'
 import { storeOAuthData } from '@/lib/oauth-temp-store'
 import { ensureSessionUser } from '@/lib/session-user'
 import { redirectTo } from '@/lib/redirect-url'
+import { oauthEvent, oauthError } from '@/lib/oauth/telemetry'
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -25,10 +26,12 @@ export async function GET(req: NextRequest) {
   const error = searchParams.get('error')
 
   if (!isValidOAuthState(req, 'linkedin', state)) {
+    oauthEvent('linkedin', 'callback', 'state_mismatch')
     return NextResponse.redirect(redirectTo('/accounts?error=linkedin_state_mismatch'))
   }
 
   if (error || !code) {
+    oauthEvent('linkedin', 'callback', 'denied')
     return NextResponse.redirect(
       redirectTo('/accounts?error=linkedin_denied')
     )
@@ -63,6 +66,7 @@ export async function GET(req: NextRequest) {
     if (pages.length === 0) {
       // If org scope is denied, fail clearly for page-only mode.
       if (orgAccessDenied) {
+        oauthEvent('linkedin', 'callback', 'pages_permissions_required')
         const res = NextResponse.redirect(
           redirectTo('/accounts?error=linkedin_pages_permissions_required')
         )
@@ -103,6 +107,7 @@ export async function GET(req: NextRequest) {
       })
       const res = NextResponse.redirect(redirectTo('/accounts?success=linkedin'))
       clearOAuthStateCookie(res, 'linkedin')
+      oauthEvent('linkedin', 'callback', 'success')
       return res
     }
 
@@ -113,10 +118,12 @@ export async function GET(req: NextRequest) {
       redirectTo(`/accounts/connect/linkedin?key=${key}`)
     )
     clearOAuthStateCookie(res, 'linkedin')
+    oauthEvent('linkedin', 'callback', 'success')
     return res
   } catch (err: unknown) {
     const error = err as { response?: { data?: unknown }; message?: string }
     console.error('LinkedIn OAuth error:', error.response?.data || error.message)
+    oauthError('linkedin', 'callback', err)
     return NextResponse.redirect(
       redirectTo('/accounts?error=linkedin_failed')
     )

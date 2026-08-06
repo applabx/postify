@@ -19,6 +19,7 @@ const PUBLIC_PREFIXES = [
   '/_next/image',
   '/favicon.ico',
   '/api/health',
+  '/api/metrics',
 ]
 
 function isPublicPath(pathname: string): boolean {

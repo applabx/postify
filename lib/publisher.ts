@@ -9,6 +9,8 @@ import {
 } from '@/lib/oauth/meta'
 import { postTweet, postToBluesky, postToPinterest, postToTumblr, uploadBlueskyBlob } from "@/lib/oauth/platforms"
 import { validateMediaUrlDns } from "@/lib/media-url"
+import { publishPosts, publishTargets } from '@/lib/metrics'
+import { safeCaptureException } from '@/lib/sentry'
 
 type SocialAccount = {
   id: string; platform: string; accountType: string; externalId: string
@@ -74,6 +76,7 @@ export async function publishPost(postId: string): Promise<PublishResult> {
           where: { id: target.id },
           data: { status: 'SUCCESS', externalPostId: externalId, publishedAt: new Date() },
         })
+        publishTargets.inc({ platform: target.socialAccount.platform, result: 'success' })
         return { ok: true, targetId: target.id }
       } catch (err: unknown) {
         const reason = err as { message?: string; response?: { status?: number } }
@@ -82,6 +85,12 @@ export async function publishPost(postId: string): Promise<PublishResult> {
           `${reason?.message ?? 'Unknown error'}` +
           (reason?.response?.status ? ` (HTTP ${reason.response.status})` : '')
         )
+        publishTargets.inc({ platform: target.socialAccount.platform, result: 'failure' })
+        safeCaptureException(err, {
+          phase: 'publish-target',
+          platform: target.socialAccount.platform,
+          postId,
+        })
         await prisma.postTarget.update({
           where: { id: target.id },
           data: { status: 'FAILED', errorMessage: reason?.message || 'Unknown error' },
@@ -113,6 +122,8 @@ export async function publishPost(postId: string): Promise<PublishResult> {
     data: { status: finalStatus, publishedAt: new Date() },
   })
 
+  publishPosts.inc({ result: finalStatus })
+
   return { postId, successCount, failCount, totalTargets: post.targets.length }
 }
 
@@ -127,6 +138,20 @@ async function publishToTarget(
   target: PostTarget & { socialAccount: SocialAccount }
 ): Promise<string> {
   const acc = target.socialAccount
+
+  // ─── Dry-run mode (soak/chaos/staging) ─────────────────────────────────
+  // PUBLISH_DRY_RUN=true short-circuits the platform call: the full queue,
+  // claim, and finalize state machine still runs, but nothing is sent to
+  // external APIs. Used by the soak/chaos harness and staging environments.
+  // PUBLISH_DRY_RUN_DELAY_MS simulates platform latency for realistic tests.
+  if (process.env.PUBLISH_DRY_RUN === 'true') {
+    const delayMs = Number(process.env.PUBLISH_DRY_RUN_DELAY_MS || 0)
+    if (delayMs > 0) {
+      await new Promise((r) => setTimeout(r, delayMs))
+    }
+    return `dry-run:${acc.platform}:${target.id}:${Date.now()}`
+  }
+
   const accessToken = decryptSecret(acc.accessToken)
   const refreshToken = acc.refreshToken ? decryptSecret(acc.refreshToken) : null
   const pageToken = acc.pageToken ? decryptSecret(acc.pageToken) : null

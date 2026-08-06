@@ -7,6 +7,7 @@ import { createHmac, randomBytes } from 'crypto'
 import { isValidOAuthState, clearOAuthStateCookie } from '@/lib/oauth-state'
 import { storeOAuthData } from '@/lib/oauth-temp-store'
 import { redirectTo } from '@/lib/redirect-url'
+import { oauthEvent, oauthError } from '@/lib/oauth/telemetry'
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -21,10 +22,12 @@ export async function GET(req: NextRequest) {
   const denied = searchParams.get('denied')
 
   if (!isValidOAuthState(req, 'tumblr', state)) {
+    oauthEvent('tumblr', 'callback', 'state_mismatch')
     return NextResponse.redirect(redirectTo('/accounts?error=tumblr_state_mismatch'))
   }
 
   if (denied || !oauthToken || !oauthVerifier) {
+    oauthEvent('tumblr', 'callback', 'denied')
     return NextResponse.redirect(redirectTo('/accounts?error=tumblr_denied'))
   }
 
@@ -46,9 +49,11 @@ export async function GET(req: NextRequest) {
       redirectTo(`/accounts/connect/tumblr?key=${key}`)
     )
     clearOAuthStateCookie(res, 'tumblr')
+    oauthEvent('tumblr', 'callback', 'success')
     return res
   } catch (err: any) {
     console.error('Tumblr OAuth error:', err.message)
+    oauthError('tumblr', 'callback', err)
     return NextResponse.redirect(redirectTo('/accounts?error=tumblr_failed'))
   }
 }
