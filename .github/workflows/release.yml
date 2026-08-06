@@ -249,6 +249,24 @@ jobs:
     runs-on: ubuntu-latest
     if: always() && needs.build-and-push.result == 'success' && needs.smoke-test.result == 'success'
     steps:
+      - name: Verify CI passed for this SHA
+        run: |
+          deadline=$((SECONDS + 900))
+          conclusion="pending"
+          while [ $SECONDS -lt $deadline ]; do
+            conclusion=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/check-runs" --jq '[.check_runs[] | select(.name=="build" and .app.slug=="github-actions")] | map(.conclusion) | if length == 0 then "absent" else .[-1] end' 2>/dev/null || echo absent)
+            echo "CI conclusion: $conclusion"
+            case "$conclusion" in
+              success) break ;;
+              failure|timed_out|action_required|cancelled) echo "::error:: CI did not pass for ${{ github.sha }} (conclusion=$conclusion)"; exit 1 ;;
+              *) sleep 30 ;;
+            esac
+          done
+          if [ "$conclusion" != "success" ]; then
+            echo "::error:: CI check timed out (conclusion=$conclusion)"
+            exit 1
+          fi
+
       - name: Final release gate
         run: |
           cat <<'EOF'
