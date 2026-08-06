@@ -17,6 +17,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
