@@ -192,6 +192,9 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && !inputs.skip_deploy)
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Wait for production to serve ${{ github.sha }}
         env:
           EXPECTED_COMMIT: ${{ github.sha }}
