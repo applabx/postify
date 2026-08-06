@@ -238,19 +238,8 @@ jobs:
             echo "origin curl exit=$? stderr=$(head -c 200 /tmp/curlerr 2>/dev/null)"
             echo "origin body head: $(printf '%s' "$body" | head -c 160)"
           fi
-          printf '%s' "$body" | sed 's/__CURL_EXIT__:.*//' | python3 - <<'EOF'
-          import json, os, sys
-          body = json.load(sys.stdin)
-          assert body.get('status') == 'ok', body
-          assert body.get('commit') == '${{ github.sha }}', body
-          c = body.get('components', {})
-          for k in ('db', 'redis', 'queue', 'worker'):
-              assert k in c, f'missing component {k}: {body}'
-              assert c[k] in ('healthy', 'running'), f'{k} unhealthy: {c[k]}'
-          assert body.get('uptimeSec', 0) >= 30, f'container restarted recently (uptimeSec={body.get("uptimeSec")})'
-          print('SMOKE PASS — components:', json.dumps(c))
-          print('uptimeSec:', body.get('uptimeSec'))
-          EOF
+          printf '%s' "$body" | sed 's/__CURL_EXIT__:.*//' > /tmp/health.json
+          python3 scripts/check-health.py /tmp/health.json '${{ github.sha }}'
 
   release-checklist:
     needs: [build-and-push, smoke-test]
