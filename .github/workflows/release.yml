@@ -238,7 +238,7 @@ jobs:
             echo "origin curl exit=$? stderr=$(head -c 200 /tmp/curlerr 2>/dev/null)"
             echo "origin body head: $(printf '%s' "$body" | head -c 160)"
           fi
-          printf '%s' "$body" | python3 - <<'EOF'
+          printf '%s' "$body" | sed 's/__CURL_EXIT__:.*//' | python3 - <<'EOF'
           import json, os, sys
           body = json.load(sys.stdin)
           assert body.get('status') == 'ok', body
