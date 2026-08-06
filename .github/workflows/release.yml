@@ -74,7 +74,7 @@ jobs:
           cache-from: type=gha,scope=release
           cache-to: type=gha,mode=max,scope=release
           build-args: |
-            NODE_VERSION=20.11.1
+            NODE_VERSION=22
           provenance: mode=max
           sbom: true
 
