@@ -226,12 +226,18 @@ jobs:
       - name: Full smoke checks (health, db, redis, queue, worker, restarts)
         env:
           HEALTH_URL: ${{ vars.PROD_HEALTH_URL || 'https://postify.applabx.com/api/health' }}
+          PROD_ORIGIN_IP: ${{ vars.PROD_ORIGIN_IP || '178.105.157.205' }}
         run: |
-          python3 - <<'EOF'
-          import json, os, urllib.request
-          url = os.environ['HEALTH_URL']
-          with urllib.request.urlopen(url, timeout=15) as r:
-              body = json.load(r)
+          HOST=$(printf '%s' "$HEALTH_URL" | sed -E 's|https?://([^/:]+).*|\1|')
+          body=$(curl -sS --max-time 10 "$HEALTH_URL" 2>/dev/null || true)
+          valid=$(printf '%s' "$body" | python3 -c "import json,sys;json.load(sys.stdin);print('ok')" 2>/dev/null || true)
+          if [ "$valid" != "ok" ]; then
+            echo "Cloudflare blocked runner egress — falling back to origin $HOST -> $PROD_ORIGIN_IP"
+            body=$(curl -sS --max-time 10 --resolve "$HOST:443:$PROD_ORIGIN_IP" "$HEALTH_URL" 2>/dev/null || true)
+          fi
+          printf '%s' "$body" | python3 - <<'EOF'
+          import json, os, sys
+          body = json.load(sys.stdin)
           assert body.get('status') == 'ok', body
           assert body.get('commit') == '${{ github.sha }}', body
           c = body.get('components', {})
