@@ -259,9 +259,16 @@ jobs:
           deadline=$((SECONDS + 900))
           rc=2
           while [ $SECONDS -lt $deadline ]; do
-            python3 scripts/check-ci.py "${{ github.repository }}" "${{ github.sha }}"
-            rc=$?
-            [ $rc -ne 2 ] && break
+            rc=2
+            if python3 scripts/check-ci.py "${{ github.repository }}" "${{ github.sha }}"; then
+              rc=0
+              break
+            else
+              rc=$?
+            fi
+            if [ $rc -ne 2 ]; then
+              break
+            fi
             sleep 30
           done
           if [ $rc -ne 0 ]; then
