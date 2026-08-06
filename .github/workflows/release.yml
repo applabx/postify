@@ -81,20 +81,7 @@ jobs:
       - name: Verify OCI labels on published image
         run: |
           ref="${{ env.IMAGE }}@${{ steps.build.outputs.digest }}"
-          inspect=$(docker buildx imagetools inspect "$ref" --format '{{json .Image}}')
-          echo "$inspect" | python3 -c '
-            import json, sys
-            d = json.load(sys.stdin)
-            required = ("org.opencontainers.image.revision", "org.opencontainers.image.created",
-                        "org.opencontainers.image.source", "org.opencontainers.image.version")
-            missing = [k for k in required if k not in d]
-            if missing:
-                print("::error:: missing OCI labels: %s" % missing)
-                sys.exit(1)
-            print("OCI labels OK:")
-            for k in required:
-                print("  %s = %s" % (k, d[k]))
-            '
+          docker buildx imagetools inspect "$ref" --format '{{json .Image}}' | python3 scripts/check-oci-labels.py
           echo "digest=${{ steps.build.outputs.digest }}" >> "$GITHUB_STEP_SUMMARY"
           echo "published ref: $ref"
 
@@ -111,7 +98,7 @@ jobs:
 
       - name: Upload Trivy SARIF to code scanning
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-results.sarif
 
