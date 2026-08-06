@@ -30,7 +30,7 @@
     "axios": "^1.14.0",
     "bcryptjs": "^2.4.3",
     "bull": "^4.16.5",
-    "ioredis": "^5.10.1",
+    "ioredis": "^6.0.0",
     "nodemailer": "^6.9.16",
     "next": "16.3.0",
     "next-auth": "^4.24.13",
