@@ -23,11 +23,11 @@ node_modules
 .next
 out
 build
+dist
 
 # Local tooling / docs / tests — not needed at runtime
 *.md
 QA
-scripts
 tests
 test-results
 playwright-report
