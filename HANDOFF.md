@@ -4,8 +4,20 @@ Update this file before ending every coding session.
 
 ## Current Repository Status
 
-- Branch: master
-- Auth middleware active, OAuth tokens secured, all critical workflows verified
+- Branch: master; origin fully synced (`9a3f76aa14d60eda9c8a19ce94843aaf299b11c0` certified, later commits too)
+- **CI/CD pipeline fully operational and certified end-to-end** — see `QA/Phase-9-CICD-Recovery-Report.md`
+- Production auto-deploys every master push via the Coolify GitHub App webhook (verified working)
+
+## Session Summary: CI/CD Recovery Sprint (2026-08-06)
+
+- **Unblocked pushes**: keyring `applabx` account has full admin on `applabx/postify` (`gh auth switch --user applabx` before push; the active account flips back to `investvietnamofficial` between sessions).
+- **Release pipeline rebuilt**: buildx/login v4, metadata v6, build-push v7, trivy v0.36.0 (SARIF), cosign keyless signing, CycloneDX SBOM, OCI-label verification step, release-manifest + GitHub Release per SHA, Coolify deploy trigger (needs `COOLIFY_API_KEY` secret to activate), smoke-test job, release-checklist gate (verifies CI check-run for the same SHA).
+- **Trivy cleared**: 45 HIGH/CRITICAL → 0 via next 16.2.2→16.3.0, `overrides: {uuid: ^13.0.0}`, Dockerfile removes bundled npm from runner stage.
+- **CI fixed**: DATABASE_URL env, Redis+Postgres service containers, `prisma migrate deploy`, `--test-force-exit` (Node 20 test runner hangs with live Redis), Node 22 (matches prod runtime).
+- **Cloudflare discovery**: domain is behind Cloudflare; bot-challenge (403 "Just a moment...") blocks GitHub runner egress. Smoke tests fall back to direct origin `--resolve postify.applabx.com:443:178.105.157.205` (override via `PROD_ORIGIN_IP` variable).
+- **Certified release**: `9a3f76aa` — full chain green (CI → GHCR `sha256:07d069fa...` → Coolify → prod health commit matches).
+- **Lesson learned (repeatedly)**: never embed multi-line python in workflow YAML — put it in `scripts/*.py` (check-oci-labels.py, check-health.py, check-ci.py).
+- Full detail: `QA/Phase-9-CICD-Recovery-Report.md`.
 
 ## Session Summary: Workflow Verification & Production Hardening (2026-07-29)
 

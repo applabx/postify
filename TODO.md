@@ -22,6 +22,24 @@
 - [ ] Replace `deploy.sh` schema push with Prisma migrations before production use
 - [ ] Add `command: redis-server --appendonly yes` to docker-compose.yml
 
+## Deployment Blockers (2026-08-06 — see QA/Phase-8B-Deployment-Certification-Report.md)
+
+- [x] PUSH `76ee8ad` (release.yml: `aquasecurity/trivy-action@0.28.0` → `v0.30.0`) — local commit, cannot be pushed from this environment
+- [x] Confirm GHCR has the a3ae2a4 image (Release run `31042238685` failed; no sha-tag ever pushed)
+- [x] Force Coolify redeploy and run `prisma migrate deploy` on prod (3 pending migrations)
+- [x] Verify prod health now returns `components` (currently absent → pre-Sprint-2 runtime)
+
+## CI/CD Recovery Sprint (2026-08-06 — see QA/Phase-9-CICD-Recovery-Report.md)
+
+- [x] Rebuild release.yml (all actions current, Trivy, cosign, SBOM, OCI label verify, artifacts, release per SHA)
+- [x] Fix CI (DATABASE_URL, Redis+Postgres services, migrate deploy, --test-force-exit, node 22)
+- [x] Clear Trivy gate (next 16.3.0, uuid override, strip bundled npm) — 45 → 0 HIGH/CRITICAL
+- [x] Cloudflare runner-egress workaround (origin fallback in smoke test)
+- [x] Certified release `9a3f76aa` end-to-end (CI → GHCR digest → Coolify → health commit)
+- [ ] Switch Coolify to pull the GHCR digest instead of source build (strict digest provenance)
+- [ ] Add Cloudflare WAF rule allowing GitHub Actions egress ranges
+- [ ] Merge dependabot PRs (checkout v7, setup-node v7) to clear Node 20 deprecation warnings
+
 ## Medium Priority
 
 - [ ] Fix validateEnv() — it's dead code (never imported)

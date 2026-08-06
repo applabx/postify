@@ -206,6 +206,32 @@ For local/dev testing without Google OAuth: set `ENABLE_DEV_AUTH=true` + `AUTH_U
 
 ## Current Operational Notes
 
+### ⚠️ CI/CD pipeline (2026-08-06 — Phase 9 recovery, see QA/Phase-9-CICD-Recovery-Report.md)
+- **Push identity**: the keyring `applabx` account has full admin on `applabx/postify`.
+  Run `gh auth switch --user applabx` before `git push` — the active account
+  resets to `investvietnamofficial` between sessions.
+- **Coolify GitHub App webhook WORKS**: production auto-deploys every master push
+  (source build on the server, ~30s). The earlier "webhook disconnected" state
+  was transient. There are ZERO repo webhooks — Coolify uses a GitHub App, so
+  `GET /repos/.../hooks` being empty is expected.
+- **Production runs Coolify's source build, not the GHCR digest** — the health
+  `commit` field bridges the chains. Strict digest provenance requires pointing
+  Coolify at `ghcr.io/applabx/postify@sha256:<digest>` (see ROLLBACK.md).
+- **Cloudflare**: `postify.applabx.com` is behind Cloudflare (A/AAAA = 172.67.x/104.21.x).
+  Cloudflare bot-challenges (403 "Just a moment...") block GitHub runner egress.
+  The Release smoke test falls back to the direct origin
+  (`curl --resolve postify.applabx.com:443:178.105.157.205`; override via
+  `PROD_ORIGIN_IP` repo variable).
+- **Release pipeline** (green, certified `9a3f76aa`): buildx/login v4, metadata v6,
+  build-push v7 (provenance+sbom), trivy v0.36.0 (SARIF, HIGH/CRITICAL gate),
+  cosign keyless, CycloneDX SBOM, OCI-label verify, release-manifest + GitHub
+  Release per SHA, smoke-test job, release-checklist gate (verifies CI check-run).
+- **CI**: node 22 (matches prod runtime), `--test-force-exit` (Node 20 test
+  runner hangs with live Redis/Bull handles), Redis+Postgres service containers,
+  `prisma migrate deploy`, `DATABASE_URL` in env.
+- **Rule**: never embed multi-line python in workflow YAML — use `scripts/*.py`
+  (check-oci-labels.py, check-health.py, check-ci.py).
+
 ### ⚠️ LinkedIn OAuth — two hard constraints (production incident 2026-08-05)
 1. **Scopes**: The LinkedIn auth URL must ONLY request
    `openid profile email w_member_social`. Verified against LinkedIn
