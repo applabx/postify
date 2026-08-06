@@ -200,8 +200,11 @@ jobs:
           deadline=$((SECONDS + 900))
           commit=""
           while [ $SECONDS -lt $deadline ]; do
-            commit=$(curl -s --max-time 10 "$HEALTH_URL" | python3 -c "import json,sys;print(json.load(sys.stdin).get('commit',''))" 2>/dev/null || true)
-            [ -n "$commit" ] && echo "health commit: $commit"
+            body=$(curl -sS --max-time 10 -w '\n__HTTP_CODE__:%{http_code}' "$HEALTH_URL" 2>/dev/null || true)
+            code=$(printf '%s' "$body" | sed -n 's/.*__HTTP_CODE__://p')
+            json=$(printf '%s' "$body" | sed 's/__HTTP_CODE__:.*//')
+            commit=$(printf '%s' "$json" | python3 -c "import json,sys;print(json.load(sys.stdin).get('commit',''))" 2>/dev/null || true)
+            echo "poll: http=$code commit='$commit'"
             [ "$commit" = "$EXPECTED_COMMIT" ] && break
             sleep 15
           done
