@@ -9,6 +9,9 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  DATABASE_URL: postgresql://ci:ci@localhost:5432/postify
+
 jobs:
   build:
     runs-on: ubuntu-latest
