@@ -22,6 +22,14 @@ jobs:
         image: redis:7-alpine
         ports:
           - 6379:6379
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: postify
+        ports:
+          - 5432:5432
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -29,6 +37,7 @@ jobs:
           node-version: '22.x'
           cache: npm
       - run: npm ci --legacy-peer-deps
+      - run: npx prisma migrate deploy
       - run: npm run lint:gate
       - run: npx prisma validate
       - run: npx tsx --test --test-force-exit tests/*.test.ts
