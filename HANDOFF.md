@@ -4,19 +4,26 @@ Update this file before ending every coding session.
 
 ## Current Repository Status
 
-- Branch: master; origin fully synced (`9a3f76aa14d60eda9c8a19ce94843aaf299b11c0` certified, later commits too)
-- **CI/CD pipeline fully operational and certified end-to-end** — see `QA/Phase-9-CICD-Recovery-Report.md`
-- Production auto-deploys every master push via the Coolify GitHub App webhook (verified working)
+- Branch: master; origin at `c21d6c5` (RC4 SaaS-readiness head)
+- **RC4 complete**: worker architecture, metrics, Sentry, immutable-deploy tooling, soak/chaos — see `QA/Phase-10-RC4-SaaS-Readiness-Report.md`
+- **GitHub Actions was in MAJOR OUTAGE** (2026-08-06 ~19:30 UTC, githubstatus.com) — pushes `702bcb1`/`46dd494`/`c21d6c5` did NOT create CI/Release runs. Manual `workflow_dispatch` of Release worked (run `31126881965`) and failed at the Docker build (`.dockerignore` excluded `scripts/` → fixed in `c21d6c5`). On outage recovery: re-run `gh workflow run release.yml --ref master` and verify the full chain.
 
-## Session Summary: CI/CD Recovery Sprint (2026-08-06)
+## Session Summary: RC4 — Platform Scale & SaaS Readiness (2026-08-06)
 
-- **Unblocked pushes**: keyring `applabx` account has full admin on `applabx/postify` (`gh auth switch --user applabx` before push; the active account flips back to `investvietnamofficial` between sessions).
-- **Release pipeline rebuilt**: buildx/login v4, metadata v6, build-push v7, trivy v0.36.0 (SARIF), cosign keyless signing, CycloneDX SBOM, OCI-label verification step, release-manifest + GitHub Release per SHA, Coolify deploy trigger (needs `COOLIFY_API_KEY` secret to activate), smoke-test job, release-checklist gate (verifies CI check-run for the same SHA).
-- **Trivy cleared**: 45 HIGH/CRITICAL → 0 via next 16.2.2→16.3.0, `overrides: {uuid: ^13.0.0}`, Dockerfile removes bundled npm from runner stage.
-- **CI fixed**: DATABASE_URL env, Redis+Postgres service containers, `prisma migrate deploy`, `--test-force-exit` (Node 20 test runner hangs with live Redis), Node 22 (matches prod runtime).
-- **Cloudflare discovery**: domain is behind Cloudflare; bot-challenge (403 "Just a moment...") blocks GitHub runner egress. Smoke tests fall back to direct origin `--resolve postify.applabx.com:443:178.105.157.205` (override via `PROD_ORIGIN_IP` variable).
-- **Certified release**: `9a3f76aa` — full chain green (CI → GHCR `sha256:07d069fa...` → Coolify → prod health commit matches).
-- **Lesson learned (repeatedly)**: never embed multi-line python in workflow YAML — put it in `scripts/*.py` (check-oci-labels.py, check-health.py, check-ci.py).
+- **Worker architecture**: `lib/worker.ts` (heartbeats w/ version+jobsProcessed+RSS, graceful SIGTERM drain→close→exit 0, crash capture), `worker/index.ts` + esbuild bundle shipped in the image, `PUBLISH_WORKER=true|false|unset(legacy)` gating; multi-worker verified (2 workers, 40 jobs, 0 dupes).
+- **Metrics**: `/api/metrics` (prom-client) — publish/queue/worker/OAuth/API/process/redis/pg; `middleware.ts` whitelists it; `docs/GRAFANA.md`.
+- **Sentry**: `lib/sentry.ts` + client boundary; scrubs PII; captures oauth/publish/queue/token-refresh/worker crashes. Set `SENTRY_DSN`/`NEXT_PUBLIC_SENTRY_DSN` in prod.
+- **Immutable deploys**: `health.image` (CONTAINER_IMAGE), `scripts/pin-coolify-digest.sh`, smoke test digest assertion (`PROD_REQUIRE_DIGEST`).
+- **OAuth harness**: `tests/oauth-certification.test.ts` (27 total tests), `docs/OAUTH_CERTIFICATION.md`.
+- **Soak/chaos evidence**: 240 publishes 0 dupes; RSS 90→94MB; SIGTERM exit 0 in 531ms; SIGKILL → orphan never republished; redis-restart 20/20; postgres-restart 19/20+orphan+queue-recovery; 200-burst; 2-worker.
+- **Findings fixed**: lint-gate 1MB maxBuffer; `.dockerignore` excluded scripts; worker heartbeat lazyConnect race; Bull removeOnComplete caps counters (drain via DB); scheduler attempts 3→5.
+- Production still runs legacy mode (web processes jobs) until the operator adds the worker container (docs/OPERATIONS.md §1).
+
+## Session Summary: CI/CD Recovery (2026-08-06, still in force)
+
+- Push identity: `gh auth switch --user applabx` before `git push` (active account resets to `investvietnamofficial` between sessions).
+- Cloudflare bot-challenges GitHub runner egress — smoke tests fall back to direct origin `--resolve postify.applabx.com:443:178.105.157.205`.
+- Never embed multi-line python in workflow YAML — use `scripts/*.py`.
 - Full detail: `QA/Phase-9-CICD-Recovery-Report.md`.
 
 ## Session Summary: Workflow Verification & Production Hardening (2026-07-29)

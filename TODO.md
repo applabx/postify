@@ -40,6 +40,22 @@
 - [ ] Add Cloudflare WAF rule allowing GitHub Actions egress ranges
 - [ ] Merge dependabot PRs (checkout v7, setup-node v7) to clear Node 20 deprecation warnings
 
+## RC4 — SaaS Readiness (2026-08-06 — see QA/Phase-10-RC4-SaaS-Readiness-Report.md)
+
+- [x] Dedicated worker + graceful shutdown + heartbeats + multi-worker (verified 0 dupes)
+- [x] /api/metrics (Prometheus) + docs/GRAFANA.md
+- [x] Sentry integration (node+react, PII scrub) — `lib/sentry.ts`
+- [x] OAuth certification harness (7 tests) + docs/OAUTH_CERTIFICATION.md
+- [x] Soak + 6 chaos scenarios, all PASS (evidence in report §10–12)
+- [x] Immutable-deploy tooling (health.image, pin-coolify-digest.sh, smoke digest gate)
+- [x] docs/OPERATIONS.md
+- [ ] CERTIFY `c21d6c5` — re-run Release workflow after the GitHub Actions major outage clears
+- [ ] Deploy worker container in prod (PUBLISH_WORKER=true) + set PUBLISH_WORKER=false on web
+- [ ] Pin Coolify to GHCR digest + set CONTAINER_IMAGE (strict digest mode)
+- [ ] Set SENTRY_DSN + NEXT_PUBLIC_SENTRY_DSN in Coolify
+- [ ] Enable Redis appendonly persistence in prod Coolify compose
+- [ ] Activate COOLIFY_API_KEY secret to auto-trigger deploys from the pipeline
+
 ## Medium Priority
 
 - [ ] Fix validateEnv() — it's dead code (never imported)
