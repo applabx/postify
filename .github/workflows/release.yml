@@ -252,6 +252,9 @@ jobs:
       checks: read
     if: always() && needs.build-and-push.result == 'success' && needs.smoke-test.result == 'success'
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Verify CI passed for this SHA
         env:
           GITHUB_TOKEN: ${{ github.token }}
