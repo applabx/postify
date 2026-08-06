@@ -196,15 +196,25 @@ jobs:
         env:
           EXPECTED_COMMIT: ${{ github.sha }}
           HEALTH_URL: ${{ vars.PROD_HEALTH_URL || 'https://postify.applabx.com/api/health' }}
+          PROD_ORIGIN_IP: ${{ vars.PROD_ORIGIN_IP || '178.105.157.205' }}
         run: |
+          HOST=$(printf '%s' "$HEALTH_URL" | sed -E 's|https?://([^/:]+).*|\1|')
           deadline=$((SECONDS + 900))
           commit=""
           while [ $SECONDS -lt $deadline ]; do
-            body=$(curl -sS --max-time 10 -w '\n__HTTP_CODE__:%{http_code}' "$HEALTH_URL" 2>/dev/null || true)
-            code=$(printf '%s' "$body" | sed -n 's/.*__HTTP_CODE__://p')
-            json=$(printf '%s' "$body" | sed 's/__HTTP_CODE__:.*//')
-            commit=$(printf '%s' "$json" | python3 -c "import json,sys;print(json.load(sys.stdin).get('commit',''))" 2>/dev/null || true)
-            echo "poll: http=$code commit='$commit'"
+            for target in cf origin; do
+              if [ "$target" = origin ]; then
+                body=$(curl -sS --max-time 10 --resolve "$HOST:443:$PROD_ORIGIN_IP" -w '\n__HTTP_CODE__:%{http_code}' "$HEALTH_URL" 2>/dev/null || true)
+              else
+                body=$(curl -sS --max-time 10 -w '\n__HTTP_CODE__:%{http_code}' "$HEALTH_URL" 2>/dev/null || true)
+              fi
+              code=$(printf '%s' "$body" | sed -n 's/.*__HTTP_CODE__://p')
+              json=$(printf '%s' "$body" | sed 's/__HTTP_CODE__:.*//')
+              commit=$(printf '%s' "$json" | python3 -c "import json,sys;print(json.load(sys.stdin).get('commit',''))" 2>/dev/null || true)
+              echo "poll($target): http=$code commit='$commit'"
+              [ "$commit" = "$EXPECTED_COMMIT" ] && break
+              commit=""
+            done
             [ "$commit" = "$EXPECTED_COMMIT" ] && break
             sleep 15
           done
