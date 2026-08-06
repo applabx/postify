@@ -31,5 +31,5 @@ jobs:
       - run: npm ci --legacy-peer-deps
       - run: npm run lint:gate
       - run: npx prisma validate
-      - run: npx tsx --test tests/*.test.ts
+      - run: npx tsx --test --test-force-exit tests/*.test.ts
       - run: npm run build
