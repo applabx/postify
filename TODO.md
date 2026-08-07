@@ -49,7 +49,7 @@
 - [x] Soak + 6 chaos scenarios, all PASS (evidence in report §10–12)
 - [x] Immutable-deploy tooling (health.image, pin-coolify-digest.sh, smoke digest gate)
 - [x] docs/OPERATIONS.md
-- [ ] CERTIFY `c21d6c5` — re-run Release workflow after the GitHub Actions major outage clears
+- [x] CERTIFY `c21d6c5` — re-run Release workflow after the GitHub Actions major outage clears
 - [ ] Deploy worker container in prod (PUBLISH_WORKER=true) + set PUBLISH_WORKER=false on web
 - [ ] Pin Coolify to GHCR digest + set CONTAINER_IMAGE (strict digest mode)
 - [ ] Set SENTRY_DSN + NEXT_PUBLIC_SENTRY_DSN in Coolify
