@@ -3,6 +3,7 @@ import { logger } from './logger'
 import { getSharedRedis, closeSharedRedis } from './redis'
 import { getPublishQueue, registerPublishProcessor } from './scheduler'
 import { safeCaptureException } from './sentry'
+import { randomUUID } from 'node:crypto'
 import './env'
 
 // ─── Dedicated publish worker ────────────────────────────────────────────────
@@ -12,8 +13,12 @@ import './env'
 // publishing even under concurrent workers or crashes.
 
 const WORKER_VERSION = process.env.SOURCE_COMMIT || 'dev'
-const WORKER_ID =
-  process.env.POD_NAME || (typeof process !== 'undefined' ? `pid:${process.pid}` : 'pid:n/a')
+// Unique per worker instance. Containers share PID 1 and the image sets
+// HOSTNAME=0.0.0.0 (Next.js standalone), so neither is unique across
+// replicas — fall back to a per-process UUID. POD_NAME is used under
+// Kubernetes. Stale heartbeats expire via TTL, so changing IDs across
+// restarts is safe.
+const WORKER_ID = process.env.POD_NAME || `w-${randomUUID().slice(0, 8)}`
 const HEARTBEAT_PREFIX = 'postify:worker:'
 const HEARTBEAT_TTL_SECONDS = 45
 const HEARTBEAT_INTERVAL_MS = 15_000
