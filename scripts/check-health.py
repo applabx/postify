@@ -56,6 +56,14 @@ def main() -> int:
     else:
         print("health.image absent — deployment not yet digest-pinned (see docs/OPERATIONS.md)")
 
+    # Stale-code guard: a commit label alone can lie (Coolify sets
+    # SOURCE_COMMIT from the deploy event even when its source clone is
+    # behind — observed 2026-08-07). Under strict mode the running code must
+    # expose the RC4 health fields (image + workers).
+    if require_digest and "workers" not in body:
+        print("::error:: health.workers missing — running container predates the RC4 health route")
+        return 1
+
     workers = body.get("workers")
     if isinstance(workers, list) and workers:
         now = datetime.now(timezone.utc)

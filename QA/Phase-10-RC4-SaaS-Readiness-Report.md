@@ -144,23 +144,30 @@ zero failures, zero duplicates, sub-second graceful shutdown, flat RSS.
 
 ## 13. Remaining Risks
 
-1. **GitHub Actions outage** blocked pipeline certification of this commit —
-   rerun/re-dispatch on recovery; verify CI + Release + smoke green.
+1. **Coolify stale-source deploy (observed 2026-08-07)**: after the certified
+   release `2f18847`, production `/api/health` reported `commit=2f18847` but
+   the running code was older (no `image`/`workers` fields; `/api/metrics`
+   returned 307). Coolify sets `SOURCE_COMMIT` from the deploy event even
+   when its source clone is behind — the commit label lies. This is exactly
+   the failure mode immutable digest-pinning eliminates: pin Coolify to
+   `ghcr.io/applabx/postify@sha256:5390a6a7...` + set `CONTAINER_IMAGE`
+   (docs/OPERATIONS.md §1; `pin-coolify-digest.sh`). The smoke test now
+   guards for it under `PROD_REQUIRE_DIGEST=true` (health must expose
+   `image` + `workers`).
 2. **Production still runs legacy mode** (web processes jobs) until the
    operator deploys the worker container and sets `PUBLISH_WORKER=false` on
    web. The health `worker` component only enforces heartbeats in split mode
    by design.
-3. **Digest pinning is operator-driven** (Coolify UI/API): until
-   `CONTAINER_IMAGE` is set, `health.image` is null and the digest check is
-   advisory (strict mode via `PROD_REQUIRE_DIGEST=true`).
+3. **GitHub Actions outage** (2026-08-06 ~19:16–2026-08-07 ~06:30 UTC) ate
+   push-triggered runs for `702bcb1`/`46dd494`/`c21d6c5`; final head
+   `2f18847` was fully certified after recovery (CI #129 + Release #62).
 4. **Redis persistence** (appendonly) still not configured in production
-   Coolify compose — jobs in RAM are lost on Redis crash (documented in
-   OPERATIONS.md).
+   Coolify compose — jobs in RAM are lost on Redis crash.
 5. **Sentry DSN not set** in production — install once to activate error
    monitoring.
 6. **PostgreSQL-restart orphans** wait up to 30 min for reconciliation —
    acceptable safety trade-off (never auto-republish).
-7. Dependabot PR burst saturates the runner queue (outage-related).
+7. Dependabot PR burst can saturate the runner queue.
 
 ## 14. Technical Debt
 
@@ -179,9 +186,14 @@ zero failures, zero duplicates, sub-second graceful shutdown, flat RSS.
 
 ## 15. Exact Git Commit Hash
 
-- **`c21d6c5`** (head, includes the docker-context fix)
-- `702bcb1` — RC4 feature commit (39 files)
-- `46dd494` — empty retrigger commit (superseded by c21d6c5)
+- **`2f18847`** — certified RC4 head (CI #129 ✓, Release #62 ✓,
+  `ghcr.io/applabx/postify@sha256:5390a6a7fde3d2fd822f9c261b163a579a99dbef48154b296b6524851481ad03`)
+- `702bcb1` — RC4 feature commit (39 files; run suppressed by the Actions outage)
+- `46dd494` — empty retrigger commit (superseded)
+- `c21d6c5` — docker-context fix (scripts in .dockerignore)
+- `5dc1fc8` — RC4 report + handoff docs
+- `2f18847` includes: container-safe Redis client (family 4 + localhost
+  normalization), heartbeat error logging
 
 ## 16. Rollback Verification
 
@@ -199,5 +211,7 @@ zero failures, zero duplicates, sub-second graceful shutdown, flat RSS.
 **9.6 / 10** (from ~9.5). Gains: dedicated worker architecture + graceful
 shutdown + zero-duplicate proof, /metrics, Sentry-ready, digest-pinning
 tooling, soak/chaos automation, ops manual. Remaining gap: production still
-runs legacy mode until the worker container + digest pin are applied
-(operator steps in docs/OPERATIONS.md, §1–2).
+runs legacy mode and Coolify's stale-source build issue is unresolved until
+the operator pins the GHCR digest (docs/OPERATIONS.md §1–2). Until then,
+the commit label in /api/health is not proof of running code — the strict
+smoke mode (`PROD_REQUIRE_DIGEST=true`) is the enforcement point.
