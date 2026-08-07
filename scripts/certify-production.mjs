@@ -8,7 +8,7 @@
 //   npx tsx scripts/certify-production.mjs
 // Env: PE_IMAGE (default postify:prod-equivalent), PE_REDIS_URL,
 //      PE_DATABASE_URL, PE_REDIS_CONTAINER, PE_PG_CONTAINER
-import { spawn, execSync } from 'node:child_process'
+import { execSync } from 'node:child_process'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { PrismaClient } from '@prisma/client'
@@ -32,16 +32,13 @@ const DIGEST = 'sha256:8077d293e6c3de1f0561718d23586873265e9fe0a756c50c5f156ea70
 const prisma = new PrismaClient({ datasources: { db: { url: DATABASE_URL } } })
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
-let scenarioCount = 0
 const results = []
 
 function pass(name, detail) {
-  scenarioCount++
   results.push({ name, ok: true, detail })
   console.log(`✅ ${name} — ${detail}`)
 }
 function fail(name, detail) {
-  scenarioCount++
   results.push({ name, ok: false, detail })
   console.error(`❌ ${name} — ${detail}`)
 }
@@ -116,7 +113,7 @@ async function enqueue(posts, runAt) {
   }
 }
 
-async function assertState(userId, expected, opts = {}) {
+async function assertState(userId, expected) {
   const rows = await prisma.postTarget.findMany({ where: { post: { userId } } })
   const by = {}
   for (const r of rows) by[r.status] = (by[r.status] || 0) + 1
@@ -142,9 +139,7 @@ async function waitFor(userId, expected, timeoutMs = 180_000, toleratePublishing
   while (Date.now() < deadline) {
     try {
       const s = await assertState(userId, expected)
-      const done = s.by_SUCCESs !== undefined ? false : s.ok
       if (toleratePublishing) {
-        if (s.by_SUCCESs !== undefined) {}
         if ((s.PENDING || 0) === 0 && (s.SUCCESS || 0) >= (expected.succeeded || 0) && s.duplicates === 0) return s
       } else if (s.ok) return s
     } catch { /* db restarting */ }
@@ -183,7 +178,7 @@ async function s1Immediate() {
   const s = await waitFor(user.id, { succeeded: 10 }, 120_000)
   killWorker(w, 'TERM')
   await sleep(3000)
-  s.ok ? pass('S1 immediate publish (5×2)', JSON.stringify(s)) : fail('S1 immediate publish', JSON.stringify(s))
+  if (s.ok) { pass('S1 immediate publish (5×2)', JSON.stringify(s)) } else { fail('S1 immediate publish', JSON.stringify(s)) }
   await cleanup(user)
 }
 
@@ -196,7 +191,7 @@ async function s2Scheduled() {
   const delayed = await prisma.postTarget.count({ where: { post: { userId: user.id }, status: 'PENDING' } })
   if (delayed !== 10) { fail('S2 scheduled publish', `expected 10 PENDING pre-run, got ${delayed}`); await cleanup(user); return }
   const s = await waitFor(user.id, { succeeded: 10 }, 180_000)
-  s.ok ? pass('S2 scheduled publish (+60s)', JSON.stringify(s)) : fail('S2 scheduled publish', JSON.stringify(s))
+  if (s.ok) { pass('S2 scheduled publish (+60s)', JSON.stringify(s)) } else { fail('S2 scheduled publish', JSON.stringify(s)) }
   killWorker(w, 'TERM')
   await cleanup(user)
 }
@@ -208,7 +203,7 @@ async function s3MultipleTargets() {
   await enqueue(posts)
   const s = await waitFor(user.id, { succeeded: 12 }, 120_000)
   killWorker(w, 'TERM')
-  s.ok ? pass('S3 multiple targets (3×4=12)', JSON.stringify(s)) : fail('S3 multiple targets', JSON.stringify(s))
+  if (s.ok) { pass('S3 multiple targets (3×4=12)', JSON.stringify(s)) } else { fail('S3 multiple targets', JSON.stringify(s)) }
   await cleanup(user)
 }
 
@@ -219,7 +214,7 @@ async function s4Simultaneous() {
   await enqueue(posts) // back-to-back
   const s = await waitFor(user.id, { succeeded: 4 }, 120_000)
   killWorker(w, 'TERM')
-  s.ok ? pass('S4 two simultaneous jobs', JSON.stringify(s)) : fail('S4 two simultaneous jobs', JSON.stringify(s))
+  if (s.ok) { pass('S4 two simultaneous jobs', JSON.stringify(s)) } else { fail('S4 two simultaneous jobs', JSON.stringify(s)) }
   await cleanup(user)
 }
 
@@ -254,7 +249,7 @@ async function s6SigtermProcessing() {
   const w2 = spawnWorker(100, `cert-terms-${Date.now()}`)
   const s = await waitFor(user.id, { succeeded: 20 }, 180_000)
   killWorker(w2, 'TERM')
-  s.ok ? pass('S6 worker SIGTERM while processing', JSON.stringify(s)) : fail('S6 worker SIGTERM', JSON.stringify(s))
+  if (s.ok) { pass('S6 worker SIGTERM while processing', JSON.stringify(s)) } else { fail('S6 worker SIGTERM', JSON.stringify(s)) }
   await cleanup(user)
 }
 
@@ -266,16 +261,17 @@ async function s7Sigkill() {
   await sleep(5000)
   killWorker(w, 'KILL') // hard kill mid-job
   await sleep(2000)
-  const before = await assertState(user.id, { succeeded: 0 })
   const w2 = spawnWorker(100, `cert-kill-${Date.now()}`)
   await sleep(20000)
-  const after = await assertState(user.id, { succeeded: 10 }, { publishing: 0 })
+  const after = await assertState(user.id, { succeeded: 10 })
   killWorker(w2, 'TERM')
   const dupFree = after.duplicates === 0
   const ok = dupFree && (after.SUCCESS || 0) + (after.PUBLISHING || 0) === 10
-  ok
-    ? pass('S7 worker SIGKILL recovery', `success=${after.SUCCESS} publishing-orphans=${after.PUBLISHING} duplicates=0 (orphans await 30-min reconciliation)`)
-    : fail('S7 worker SIGKILL recovery', JSON.stringify(after))
+  if (ok) {
+    pass('S7 worker SIGKILL recovery', `success=${after.SUCCESS} publishing-orphans=${after.PUBLISHING} duplicates=0 (orphans await 30-min reconciliation)`)
+  } else {
+    fail('S7 worker SIGKILL recovery', JSON.stringify(after))
+  }
   await cleanup(user)
 }
 
@@ -288,7 +284,7 @@ async function s8RedisReconnect() {
   execSync(`docker restart ${REDIS_CONTAINER}`, { stdio: 'ignore' })
   const s = await waitFor(user.id, { succeeded: 20 }, 240_000)
   killWorker(w, 'TERM')
-  s.ok ? pass('S8 Redis reconnect (AOF persistence)', JSON.stringify(s)) : fail('S8 Redis reconnect', JSON.stringify(s))
+  if (s.ok) { pass('S8 Redis reconnect (AOF persistence)', JSON.stringify(s)) } else { fail('S8 Redis reconnect', JSON.stringify(s)) }
   await cleanup(user)
 }
 
@@ -310,9 +306,11 @@ async function s9PostgresReconnect() {
   const s = await waitFor(user.id, { succeeded: 20 }, 600_000, true)
   killWorker(w2, 'TERM')
   const ok = s.duplicates === 0 && (s.SUCCESS || 0) + (s.PUBLISHING || 0) >= 18
-  ok
-    ? pass('S9 PostgreSQL reconnect', `success=${s.SUCCESS} publishing-orphans=${s.PUBLISHING} duplicates=0`)
-    : fail('S9 PostgreSQL reconnect', JSON.stringify(s))
+  if (ok) {
+    pass('S9 PostgreSQL reconnect', `success=${s.SUCCESS} publishing-orphans=${s.PUBLISHING} duplicates=0`)
+  } else {
+    fail('S9 PostgreSQL reconnect', JSON.stringify(s))
+  }
   await cleanup(user)
 }
 
@@ -327,9 +325,11 @@ async function s10MultiWorker() {
   killWorker(w2, 'TERM')
   const hb = await heartbeatCount()
   const ok = s.duplicates === 0 && s.SUCCESS === 20 && hb >= 2
-  ok
-    ? pass('S10 multi-worker (2 workers, 20 jobs)', `success=20 duplicates=0 heartbeats=${hb}`)
-    : fail('S10 multi-worker', JSON.stringify({ s, heartbeats: hb }))
+  if (ok) {
+    pass('S10 multi-worker (2 workers, 20 jobs)', `success=20 duplicates=0 heartbeats=${hb}`)
+  } else {
+    fail('S10 multi-worker', JSON.stringify({ s, heartbeats: hb }))
+  }
   await cleanup(user)
 }
 
