@@ -34,10 +34,13 @@ let _redis: Redis | null = null
 function getRedis(): Redis | null {
   if (_redis) return _redis
   try {
-    _redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
+    const rawUrl = process.env.REDIS_URL || 'redis://localhost:6379'
+    const url = rawUrl.replace(/redis:\/\/localhost(?=[:/])/, 'redis://127.0.0.1')
+    _redis = new Redis(url, {
       lazyConnect: true,
       maxRetriesPerRequest: 1,
       enableOfflineQueue: false,
+      family: 4,
     })
     _redis.on('error', () => {
       // Swallow — fall back to the in-memory limiter

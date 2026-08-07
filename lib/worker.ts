@@ -48,8 +48,8 @@ async function writeHeartbeat(): Promise<void> {
     const payload = heartbeatPayload()
     payload.startedAt = new Date().toISOString()
     await redis.set(key, JSON.stringify(payload), 'EX', HEARTBEAT_TTL_SECONDS)
-  } catch {
-    // Redis down — the heartbeat is best-effort; worker keeps working.
+  } catch (err) {
+    console.error('[Worker] heartbeat write failed:', (err as Error).message)
   }
 }
 
