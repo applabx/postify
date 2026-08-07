@@ -4,9 +4,18 @@ Update this file before ending every coding session.
 
 ## Current Repository Status
 
-- Branch: master; origin at `c21d6c5` (RC4 SaaS-readiness head)
-- **RC4 complete**: worker architecture, metrics, Sentry, immutable-deploy tooling, soak/chaos — see `QA/Phase-10-RC4-SaaS-Readiness-Report.md`
-- **GitHub Actions was in MAJOR OUTAGE** (2026-08-06 ~19:30 UTC, githubstatus.com) — pushes `702bcb1`/`46dd494`/`c21d6c5` did NOT create CI/Release runs. Manual `workflow_dispatch` of Release worked (run `31126881965`) and failed at the Docker build (`.dockerignore` excluded `scripts/` → fixed in `c21d6c5`). On outage recovery: re-run `gh workflow run release.yml --ref master` and verify the full chain.
+- Branch: master at `f80e221`; **infrastructure frozen** at tag `production-2026-08-07-rc4` (annotated, pushed)
+- **Certified immutable artifact**: `ghcr.io/applabx/postify@sha256:652a6a54b8fc8c269868ce3e5d523bf9cb7c670f9aef09f06d1daa8a1f9917e8` (commit `49a1ced`, Trivy 0 HIGH/CRITICAL, cosign, SBOM)
+- **Production pinning BLOCKED on Coolify access** — operator runbook in `QA/Phase-11-Final-Cutover-Freeze-Report.md` §18 (pin digest, CONTAINER_IMAGE, PUBLISH_WORKER=false on web, worker app with PUBLISH_WORKER=true, PROD_REQUIRE_DIGEST=true, Sentry DSNs, redis appendonly)
+- Rollback target: `sha256:07d069fa…` (9a3f76aa) — drill verified locally; production's ACTUAL running digest must be captured on the Coolify host before pinning.
+
+## Session Summary: Final Cutover & Freeze (2026-08-07)
+
+- Phase 1 evidence pack complete (manifest, SARIF 0 findings, SPDX SBOM, OCI labels, cosign).
+- Production-equivalent stack (web + 2 docker workers + redis + pg, built from frozen source): **10/10 live queue scenarios PASS** (`scripts/certify-production.mjs`), multi-worker with distinct heartbeats, rollback drill RC4→9a3f76aa→RC4 with zero data loss, /api/metrics verified from the running web.
+- **Bugs found & fixed during the drill**: worker heartbeat-ID collision across replicas (containers share PID 1 and image HOSTNAME=0.0.0.0 → per-process UUID IDs); certify harness env split (host ports vs container bridge addresses).
+- Metrics note: publish counters are per-process (workers have no HTTP endpoint yet).
+- Full detail: `QA/Phase-11-Final-Cutover-Freeze-Report.md`.
 
 ## Session Summary: RC4 — Platform Scale & SaaS Readiness (2026-08-06)
 
