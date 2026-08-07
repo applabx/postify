@@ -110,6 +110,14 @@ No `SENTRY_DSN`/`NEXT_PUBLIC_SENTRY_DSN` verifiable in production. Integration
 is a strict no-op without a DSN (guarded; zero network calls). A controlled
 test exception requires the operator-configured DSN.
 
+## Digest enforcement (Task 4 — verified LIVE)
+`PROD_REQUIRE_DIGEST=true` was set as a repo variable. The next release run
+(`4e1586f`, 2026-08-07) **failed closed exactly as designed**:
+- build-and-push ✓ (image `sha256:652a6a54…`-family built, Trivy/cosign/SBOM ✓)
+- smoke-test ✗ → `::error:: deployment is not digest-pinned (health.image missing)`
+This proves the enforcement is active: **no release can be certified until
+production is pinned to the certified digest** — the intended cutover freeze.
+
 ## Redis (Task 6)
 Externally: `postify_redis_up 1` + health `redis: healthy`. AOF
 (`appendonly yes`) is a Coolify-compose setting — not readable without server
