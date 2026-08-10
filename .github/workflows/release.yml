@@ -116,7 +116,7 @@ jobs:
           artifact-name: sbom-${{ github.sha }}
 
       - name: Upload release evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-evidence-${{ github.sha }}
           retention-days: 30
