@@ -153,7 +153,7 @@ jobs:
           cat release-manifest.json
 
       - name: Attach manifest to GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: release-${{ github.sha }}
           name: Release ${{ github.sha }}
